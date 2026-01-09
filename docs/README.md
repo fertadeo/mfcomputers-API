@@ -1,6 +1,6 @@
-# Norte ERP API
+# MfComputers ERP API
 
-API backend para el sistema ERP de Norte Abanicos desarrollado con Node.js y TypeScript.
+API backend para el sistema ERP de MF Computers desarrollado con Node.js y TypeScript.
 
 ## Características
 
