@@ -10,13 +10,48 @@ import cookieParser from 'cookie-parser';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 8083;
+const PORT = process.env.PORT || 8086;
 
 // Middleware
-app.use(helmet()); // Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+})); // Security headers
+
+// Configuración de CORS que maneja múltiples orígenes
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : ['http://localhost:3000'];
+
+// Debug: mostrar orígenes permitidos al iniciar
+console.log('🌐 CORS - Orígenes permitidos:', allowedOrigins);
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
+  origin: (origin, callback) => {
+    // Debug: mostrar el origen recibido
+    console.log(`🔍 CORS - Origen recibido: ${origin || 'sin origen'}`);
+    
+    // Permitir requests sin origen (mobile apps, Postman, etc.)
+    if (!origin) {
+      console.log('✅ CORS - Permitiendo request sin origen');
+      return callback(null, true);
+    }
+    
+    // Verificar si el origen está permitido
+    if (allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS - Origen permitido: ${origin}`);
+      callback(null, true);
+    } else {
+      console.warn(`❌ CORS - Origen bloqueado: ${origin}`);
+      console.warn(`   Orígenes permitidos: ${allowedOrigins.join(', ')}`);
+      callback(new Error('No permitido por CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 app.use(morgan('combined')); // Logging
 
@@ -33,12 +68,24 @@ app.use(express.urlencoded({
 }));
 app.use(cookieParser());
 
-// Debug middleware for request body (mover antes de las rutas para capturar todos los requests)
+// Debug middleware for CORS and requests
 app.use((req, res, next) => {
+  // Log CORS-related headers
+  if (req.method === 'OPTIONS') {
+    console.log('=== CORS PREFLIGHT REQUEST ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Origin:', req.get('origin'));
+    console.log('Access-Control-Request-Method:', req.get('access-control-request-method'));
+    console.log('Access-Control-Request-Headers:', req.get('access-control-request-headers'));
+  }
+  
+  // Log request body for PUT/POST
   if (req.method === 'PUT' || req.method === 'POST') {
     console.log('=== REQUEST DEBUG ===');
     console.log('Method:', req.method);
     console.log('URL:', req.url);
+    console.log('Origin:', req.get('origin'));
     console.log('Content-Type:', req.get('content-type'));
     console.log('Body received:', JSON.stringify(req.body, null, 2));
     console.log('Body type:', typeof req.body);
