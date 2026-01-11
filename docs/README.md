@@ -1,6 +1,6 @@
-# Norte ERP API
+# MfComputers ERP API
 
-API backend para el sistema ERP de Norte Abanicos desarrollado con Node.js y TypeScript.
+API backend para el sistema ERP de MF Computers desarrollado con Node.js y TypeScript.
 
 ## Características
 
@@ -86,7 +86,7 @@ DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your_password
-DB_NAME=norte_erp_db
+DB_NAME=mfcomputers
 
 # Server
 PORT=8083
