@@ -2,17 +2,16 @@ import { Router, Request, Response } from 'express';
 import { UserController } from '../controllers/userController';
 import { body, param, query } from 'express-validator';
 import { handleValidationErrors, normalizeUserFields } from '../middleware/validation';
-import { authenticateJWT, authorizeRoles } from '../middleware/jwt';
+import { authenticateJWT, authorizeRoles, optionalAuthenticateJWT } from '../middleware/jwt';
+import { UserRepository } from '../repositories/UserRepository';
 
 const router = Router();
 const userController = new UserController();
 
-// Todas las rutas requieren autenticación JWT
-router.use(authenticateJWT);
-
 // GET /api/users - Obtener todos los usuarios
 router.get(
   '/',
+  authenticateJWT, // Requiere autenticación
   authorizeRoles('admin', 'gerencia'), // Solo admin y gerencia pueden ver usuarios
   query('is_active').optional().isBoolean(),
   query('role').optional().isString(),
@@ -23,6 +22,7 @@ router.get(
 // GET /api/users/:id - Obtener usuario por ID
 router.get(
   '/:id',
+  authenticateJWT, // Requiere autenticación
   authorizeRoles('admin', 'gerencia'), // Solo admin y gerencia pueden ver usuarios
   param('id').isInt({ min: 1 }),
   handleValidationErrors,
@@ -30,9 +30,11 @@ router.get(
 );
 
 // POST /api/users - Crear nuevo usuario
+// - Si no hay usuarios en la BD, permite crear sin autenticación (para bootstrap)
+// - Si ya hay usuarios, requiere autenticación con rol admin o gerencia
 router.post(
   '/',
-  authorizeRoles('admin', 'gerencia'), // Admin y gerencia pueden crear usuarios
+  optionalAuthenticateJWT, // Autenticación opcional
   normalizeUserFields, // Normalizar campos antes de validar
   body('username').notEmpty().withMessage('username es requerido'),
   body('email').isEmail().withMessage('email debe ser válido'),
@@ -42,12 +44,29 @@ router.post(
   body('role').isIn(['admin', 'manager', 'employee', 'viewer', 'gerencia', 'ventas', 'logistica', 'finanzas']).withMessage('role inválido'),
   body('isActive').optional().isBoolean(),
   handleValidationErrors,
-  (req: Request, res: Response) => userController.createUser(req as any, res)
+  async (req: Request, res: Response) => {
+    // Verificar si hay usuarios en la BD
+    const usersCount = await UserRepository.countAll();
+    
+    if (usersCount > 0) {
+      // Si ya hay usuarios, requiere autenticación con rol admin o gerencia
+      const authReq = req as any;
+      if (!authReq.user || !['admin', 'gerencia'].includes(authReq.user.role)) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Only admin/gerencia can create users when users already exist in the database' 
+        });
+      }
+    }
+    // Si no hay usuarios o el usuario está autenticado con rol válido, proceder
+    return userController.createUser(req as any, res);
+  }
 );
 
 // PUT /api/users/:id - Actualizar usuario
 router.put(
   '/:id',
+  authenticateJWT, // Requiere autenticación
   authorizeRoles('admin', 'gerencia'), // Solo admin y gerencia pueden actualizar usuarios
   normalizeUserFields, // Normalizar campos antes de validar
   param('id').isInt({ min: 1 }),
@@ -65,6 +84,7 @@ router.put(
 // DELETE /api/users/:id - Eliminar usuario (soft delete)
 router.delete(
   '/:id',
+  authenticateJWT, // Requiere autenticación
   authorizeRoles('admin', 'gerencia'), // Solo admin y gerencia pueden eliminar usuarios
   param('id').isInt({ min: 1 }),
   handleValidationErrors,
