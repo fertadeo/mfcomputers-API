@@ -14,7 +14,7 @@ function setRefreshCookie(res: any, refreshToken: string) {
   res.cookie('refresh_token', refreshToken, {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    sameSite: 'lax', // Cambiado de 'strict' a 'lax' para permitir cookies entre subdominios
     path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000
   });

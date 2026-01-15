@@ -2,8 +2,7 @@ import { Router, Request, Response } from 'express';
 import { UserController } from '../controllers/userController';
 import { body, param, query } from 'express-validator';
 import { handleValidationErrors, normalizeUserFields } from '../middleware/validation';
-import { authenticateJWT, authorizeRoles, optionalAuthenticateJWT } from '../middleware/jwt';
-import { UserRepository } from '../repositories/UserRepository';
+import { authenticateJWT, authorizeRoles } from '../middleware/jwt';
 
 const router = Router();
 const userController = new UserController();
@@ -30,11 +29,9 @@ router.get(
 );
 
 // POST /api/users - Crear nuevo usuario
-// - Si no hay usuarios en la BD, permite crear sin autenticación (para bootstrap)
-// - Si ya hay usuarios, requiere autenticación con rol admin o gerencia
+// Permite crear usuarios sin autenticación (público)
 router.post(
   '/',
-  optionalAuthenticateJWT, // Autenticación opcional
   normalizeUserFields, // Normalizar campos antes de validar
   body('username').notEmpty().withMessage('username es requerido'),
   body('email').isEmail().withMessage('email debe ser válido'),
@@ -44,23 +41,7 @@ router.post(
   body('role').isIn(['admin', 'manager', 'employee', 'viewer', 'gerencia', 'ventas', 'logistica', 'finanzas']).withMessage('role inválido'),
   body('isActive').optional().isBoolean(),
   handleValidationErrors,
-  async (req: Request, res: Response) => {
-    // Verificar si hay usuarios en la BD
-    const usersCount = await UserRepository.countAll();
-    
-    if (usersCount > 0) {
-      // Si ya hay usuarios, requiere autenticación con rol admin o gerencia
-      const authReq = req as any;
-      if (!authReq.user || !['admin', 'gerencia'].includes(authReq.user.role)) {
-        return res.status(403).json({ 
-          success: false, 
-          message: 'Only admin/gerencia can create users when users already exist in the database' 
-        });
-      }
-    }
-    // Si no hay usuarios o el usuario está autenticado con rol válido, proceder
-    return userController.createUser(req as any, res);
-  }
+  (req: Request, res: Response) => userController.createUser(req as any, res)
 );
 
 // PUT /api/users/:id - Actualizar usuario

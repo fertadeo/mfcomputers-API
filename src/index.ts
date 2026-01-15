@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { testConnection } from './config/database';
 import cookieParser from 'cookie-parser';
+import { initializeAdminUser } from './utils/initAdmin';
 
 // Load environment variables
 dotenv.config();
@@ -139,6 +140,12 @@ const startServer = async () => {
     if (!dbConnected) {
       console.error('❌ Failed to connect to database. Server will not start.');
       process.exit(1);
+    }
+
+    // Inicializar usuario admin si está habilitado (por defecto: true)
+    const initAdminOnStart = process.env.INIT_ADMIN_ON_START !== 'false';
+    if (initAdminOnStart) {
+      await initializeAdminUser();
     }
 
     app.listen(PORT, () => {
