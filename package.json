@@ -10,6 +10,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "test": "jest",
     "migrate:roles": "node scripts/run-migration.js",
+    "migrate:auth": "node scripts/run-auth-migration.js",
     "init:admin": "node scripts/create-admin-user.js"
   },
   "keywords": [
