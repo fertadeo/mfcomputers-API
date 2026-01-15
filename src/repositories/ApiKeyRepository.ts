@@ -150,7 +150,7 @@ export class ApiKeyRepository {
   /**
    * Crea una nueva API Key
    */
-  async create(data: CreateApiKeyData, createdBy?: number): Promise<{ apiKey: ApiKey; plainKey: string }> {
+  async create(data: CreateApiKeyData, createdBy?: number): Promise<{ apiKey: ApiKeyWithCreator; plainKey: string }> {
     const plainKey = ApiKeyRepository.generateApiKey();
     const keyHash = await ApiKeyRepository.hashApiKey(plainKey);
 
@@ -177,11 +177,41 @@ export class ApiKeyRepository {
       metadataJson
     ]) as any;
 
-    const newApiKey = await this.findById(result.insertId);
+    const insertId = result.insertId || result[0]?.insertId;
+
+    // Obtener la API Key creada directamente sin JOIN para evitar timeouts
+    const basicQuery = `SELECT * FROM api_keys WHERE id = ? LIMIT 1`;
+    const basicRows = await executeQuery(basicQuery, [insertId]) as DBApiKey[];
     
-    if (!newApiKey) {
-      throw new Error('Error al crear API Key');
+    if (basicRows.length === 0) {
+      throw new Error('Error al crear API Key: no se pudo recuperar después de la inserción');
     }
+    
+    const row = basicRows[0];
+    
+    // Intentar obtener información del creador solo si created_by existe (sin bloquear)
+    let creator_name: string | undefined = undefined;
+    let creator_email: string | undefined = undefined;
+    
+    if (row.created_by) {
+      try {
+        const userQuery = `SELECT username, email FROM users WHERE id = ? LIMIT 1`;
+        const userRows = await executeQuery(userQuery, [row.created_by]) as Array<{ username?: string; email?: string }>;
+        if (userRows.length > 0) {
+          creator_name = userRows[0].username;
+          creator_email = userRows[0].email;
+        }
+      } catch (error: any) {
+        // Si falla, simplemente continuamos sin la información del creador
+        console.warn('No se pudo obtener información del creador:', error.message);
+      }
+    }
+    
+    const newApiKey: ApiKeyWithCreator = {
+      ...this.mapRowToApiKey(row),
+      creator_name,
+      creator_email
+    };
 
     return {
       apiKey: newApiKey,
