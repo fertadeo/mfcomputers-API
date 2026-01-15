@@ -100,8 +100,11 @@ export class ApiKeyController {
    */
   async createApiKey(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
+      console.log('[API_KEY] Iniciando creación de API Key...');
       const { key_name, description, expires_at, rate_limit_per_minute, rate_limit_per_hour, allowed_ips, metadata } = req.body;
       const createdBy = req.user?.id;
+
+      console.log('[API_KEY] Datos recibidos:', { key_name, createdBy });
 
       if (!key_name) {
         const response: ApiResponse = {
@@ -113,6 +116,9 @@ export class ApiKeyController {
         return;
       }
 
+      console.log('[API_KEY] Llamando a apiKeyService.createApiKey...');
+      const startTime = Date.now();
+      
       const result = await this.apiKeyService.createApiKey({
         key_name,
         description,
@@ -122,6 +128,9 @@ export class ApiKeyController {
         allowed_ips,
         metadata
       }, createdBy);
+
+      const duration = Date.now() - startTime;
+      console.log(`[API_KEY] API Key creada exitosamente en ${duration}ms`);
 
       const response: ApiResponse = {
         success: true,
@@ -136,6 +145,7 @@ export class ApiKeyController {
 
       res.status(201).json(response);
     } catch (error: any) {
+      console.error('[API_KEY] Error al crear API Key:', error);
       const response: ApiResponse = {
         success: false,
         message: 'Error al crear API Key',

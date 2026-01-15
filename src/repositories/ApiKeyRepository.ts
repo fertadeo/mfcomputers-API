@@ -151,8 +151,12 @@ export class ApiKeyRepository {
    * Crea una nueva API Key
    */
   async create(data: CreateApiKeyData, createdBy?: number): Promise<{ apiKey: ApiKeyWithCreator; plainKey: string }> {
+    console.log('[API_KEY_REPO] Generando API Key...');
     const plainKey = ApiKeyRepository.generateApiKey();
+    console.log('[API_KEY_REPO] Hasheando API Key...');
+    const hashStart = Date.now();
     const keyHash = await ApiKeyRepository.hashApiKey(plainKey);
+    console.log(`[API_KEY_REPO] Hash completado en ${Date.now() - hashStart}ms`);
 
     const query = `
       INSERT INTO api_keys (
@@ -164,6 +168,8 @@ export class ApiKeyRepository {
 
     const metadataJson = data.metadata ? JSON.stringify(data.metadata) : null;
 
+    console.log('[API_KEY_REPO] Ejecutando INSERT en base de datos...');
+    const insertStart = Date.now();
     const result = await executeQuery(query, [
       data.key_name,
       plainKey, // Guardamos la key en texto plano solo para referencia (se puede eliminar después)
@@ -176,12 +182,17 @@ export class ApiKeyRepository {
       data.allowed_ips || null,
       metadataJson
     ]) as any;
+    console.log(`[API_KEY_REPO] INSERT completado en ${Date.now() - insertStart}ms`);
 
     const insertId = result.insertId || result[0]?.insertId;
+    console.log('[API_KEY_REPO] ID insertado:', insertId);
 
     // Obtener la API Key creada directamente sin JOIN para evitar timeouts
+    console.log('[API_KEY_REPO] Obteniendo API Key creada...');
+    const selectStart = Date.now();
     const basicQuery = `SELECT * FROM api_keys WHERE id = ? LIMIT 1`;
     const basicRows = await executeQuery(basicQuery, [insertId]) as DBApiKey[];
+    console.log(`[API_KEY_REPO] SELECT completado en ${Date.now() - selectStart}ms`);
     
     if (basicRows.length === 0) {
       throw new Error('Error al crear API Key: no se pudo recuperar después de la inserción');
@@ -195,6 +206,7 @@ export class ApiKeyRepository {
     
     if (row.created_by) {
       try {
+        console.log('[API_KEY_REPO] Obteniendo información del creador...');
         const userQuery = `SELECT username, email FROM users WHERE id = ? LIMIT 1`;
         const userRows = await executeQuery(userQuery, [row.created_by]) as Array<{ username?: string; email?: string }>;
         if (userRows.length > 0) {
@@ -203,9 +215,11 @@ export class ApiKeyRepository {
         }
       } catch (error: any) {
         // Si falla, simplemente continuamos sin la información del creador
-        console.warn('No se pudo obtener información del creador:', error.message);
+        console.warn('[API_KEY_REPO] No se pudo obtener información del creador:', error.message);
       }
     }
+    
+    console.log('[API_KEY_REPO] API Key creada exitosamente');
     
     const newApiKey: ApiKeyWithCreator = {
       ...this.mapRowToApiKey(row),
