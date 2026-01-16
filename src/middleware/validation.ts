@@ -78,10 +78,24 @@ export const handleValidationErrors = (
 export const validate = (validations: ValidationChain[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     console.log('[VALIDATION] Iniciando validación...');
+    console.log(`[VALIDATION] Número de validaciones: ${validations.length}`);
     const validationStart = Date.now();
     
     try {
-      await Promise.all(validations.map(validation => validation.run(req)));
+      // Agregar timeout a la validación (30 segundos máximo)
+      const validationPromise = Promise.all(validations.map((validation, index) => {
+        console.log(`[VALIDATION] Ejecutando validación ${index + 1}/${validations.length}...`);
+        return validation.run(req);
+      }));
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Timeout: La validación tomó más de 30 segundos'));
+        }, 30000);
+      });
+      
+      await Promise.race([validationPromise, timeoutPromise]);
+      
       const validationDuration = Date.now() - validationStart;
       console.log(`[VALIDATION] Validación completada en ${validationDuration}ms`);
       
@@ -103,6 +117,7 @@ export const validate = (validations: ValidationChain[]) => {
     } catch (error: any) {
       const validationDuration = Date.now() - validationStart;
       console.error(`[VALIDATION] Error durante validación (después de ${validationDuration}ms):`, error);
+      console.error('[VALIDATION] Stack trace:', error.stack);
       const response: ApiResponse = {
         success: false,
         message: 'Error durante validación',

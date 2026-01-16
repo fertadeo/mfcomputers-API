@@ -10,9 +10,10 @@ interface DatabaseConfig {
   password: string;
   database: string;
   connectionLimit: number;
-  acquireTimeout: number;
-  timeout: number;
-  reconnect: boolean;
+  queueLimit: number;
+  waitForConnections: boolean;
+  enableKeepAlive: boolean;
+  keepAliveInitialDelay: number;
 }
 
 const dbConfig: DatabaseConfig = {
@@ -22,9 +23,10 @@ const dbConfig: DatabaseConfig = {
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'mfcomputers',
   connectionLimit: 10,
-  acquireTimeout: 60000,
-  timeout: 60000,
-  reconnect: true
+  queueLimit: 0, // Sin límite en la cola
+  waitForConnections: true,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 };
 
 // Create connection pool

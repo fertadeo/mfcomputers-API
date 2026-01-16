@@ -19,9 +19,16 @@ const createApiKeyValidation = [
     .isLength({ max: 500 })
     .withMessage('La descripción no puede exceder 500 caracteres'),
   body('expires_at')
-    .optional()
-    .isISO8601()
-    .withMessage('La fecha de expiración debe ser válida (ISO 8601)'),
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Permitir null/undefined/empty
+      }
+      // Si hay un valor, debe ser una fecha ISO 8601 válida
+      const date = new Date(value);
+      return !isNaN(date.getTime());
+    })
+    .withMessage('La fecha de expiración debe ser válida (ISO 8601) o null'),
   body('rate_limit_per_minute')
     .optional()
     .isInt({ min: 1 })
@@ -108,9 +115,25 @@ router.get(
 // POST /api/api-keys - Crear una nueva API Key
 router.post(
   '/',
+  (req: Request, res: Response, next: NextFunction) => {
+    console.log('[API_KEY_ROUTE] POST /api/api-keys recibido');
+    console.log('[API_KEY_ROUTE] Body recibido:', JSON.stringify(req.body));
+    next();
+  },
   createApiKeyValidation,
   validate,
-  (req: Request, res: Response) => apiKeyController.createApiKey(req as any, res)
+  (req: Request, res: Response) => {
+    console.log('[API_KEY_ROUTE] Pasando al controller...');
+    apiKeyController.createApiKey(req as any, res).catch((error: any) => {
+      console.error('[API_KEY_ROUTE] Error no capturado en controller:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
 );
 
 // PUT /api/api-keys/:id - Actualizar una API Key
