@@ -77,20 +77,39 @@ export const handleValidationErrors = (
 
 export const validate = (validations: ValidationChain[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
-    await Promise.all(validations.map(validation => validation.run(req)));
+    console.log('[VALIDATION] Iniciando validación...');
+    const validationStart = Date.now();
     
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    try {
+      await Promise.all(validations.map(validation => validation.run(req)));
+      const validationDuration = Date.now() - validationStart;
+      console.log(`[VALIDATION] Validación completada en ${validationDuration}ms`);
+      
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        console.log('[VALIDATION] Errores encontrados:', errors.array());
+        const response: ApiResponse = {
+          success: false,
+          message: 'Errores de validación',
+          data: errors.array(),
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+      
+      console.log('[VALIDATION] Validación exitosa, pasando al siguiente middleware');
+      next();
+    } catch (error: any) {
+      const validationDuration = Date.now() - validationStart;
+      console.error(`[VALIDATION] Error durante validación (después de ${validationDuration}ms):`, error);
       const response: ApiResponse = {
         success: false,
-        message: 'Errores de validación',
-        data: errors.array(),
+        message: 'Error durante validación',
+        error: error.message,
         timestamp: new Date().toISOString()
       };
-      res.status(400).json(response);
-      return;
+      res.status(500).json(response);
     }
-    
-    next();
   };
 };

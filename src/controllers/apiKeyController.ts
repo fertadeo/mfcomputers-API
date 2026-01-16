@@ -99,12 +99,22 @@ export class ApiKeyController {
    * POST /api/api-keys - Crear una nueva API Key
    */
   async createApiKey(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const requestStart = Date.now();
     try {
+      console.log('[API_KEY] ========== INICIANDO CREACIÓN API KEY ==========');
       console.log('[API_KEY] Iniciando creación de API Key...');
       const { key_name, description, expires_at, rate_limit_per_minute, rate_limit_per_hour, allowed_ips, metadata } = req.body;
       const createdBy = req.user?.id;
 
-      console.log('[API_KEY] Datos recibidos:', { key_name, createdBy });
+      console.log('[API_KEY] Datos recibidos:', { 
+        key_name, 
+        createdBy,
+        hasDescription: !!description,
+        hasMetadata: !!metadata,
+        expires_at: expires_at || null,
+        rate_limit_per_minute: rate_limit_per_minute || 60,
+        rate_limit_per_hour: rate_limit_per_hour || 1000
+      });
 
       if (!key_name) {
         const response: ApiResponse = {
@@ -130,7 +140,9 @@ export class ApiKeyController {
       }, createdBy);
 
       const duration = Date.now() - startTime;
-      console.log(`[API_KEY] API Key creada exitosamente en ${duration}ms`);
+      const totalDuration = Date.now() - requestStart;
+      console.log(`[API_KEY] API Key creada exitosamente en ${duration}ms (total: ${totalDuration}ms)`);
+      console.log('[API_KEY] ========== CREACIÓN API KEY COMPLETADA ==========');
 
       const response: ApiResponse = {
         success: true,
@@ -145,14 +157,16 @@ export class ApiKeyController {
 
       res.status(201).json(response);
     } catch (error: any) {
-      console.error('[API_KEY] Error al crear API Key:', error);
+      const totalDuration = Date.now() - requestStart;
+      console.error(`[API_KEY] Error al crear API Key (después de ${totalDuration}ms):`, error);
+      console.error('[API_KEY] Stack trace:', error.stack);
       const response: ApiResponse = {
         success: false,
         message: 'Error al crear API Key',
         error: error.message,
         timestamp: new Date().toISOString()
       };
-      res.status(400).json(response);
+      res.status(500).json(response);
     }
   }
 

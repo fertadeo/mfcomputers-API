@@ -16,9 +16,23 @@ export class ApiKeyRepository {
 
   /**
    * Genera el hash de una API Key para almacenamiento seguro
+   * Reducido de 10 a 8 salt rounds para mejor rendimiento (sigue siendo seguro)
+   * 8 rounds es ~4x más rápido que 10 rounds pero mantiene seguridad adecuada
    */
   static async hashApiKey(apiKey: string): Promise<string> {
-    return await bcrypt.hash(apiKey, 10);
+    console.log('[API_KEY_REPO] Iniciando hash de API Key...');
+    const startTime = Date.now();
+    try {
+      // Reducir salt rounds de 10 a 8 para mejorar rendimiento
+      // 8 rounds sigue siendo seguro pero es ~4x más rápido
+      const hash = await bcrypt.hash(apiKey, 8);
+      const duration = Date.now() - startTime;
+      console.log(`[API_KEY_REPO] Hash completado en ${duration}ms`);
+      return hash;
+    } catch (error: any) {
+      console.error('[API_KEY_REPO] Error al hacer hash:', error);
+      throw new Error(`Error al generar hash de API Key: ${error.message}`);
+    }
   }
 
   /**
