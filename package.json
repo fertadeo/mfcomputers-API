@@ -11,7 +11,8 @@
     "test": "jest",
     "migrate:roles": "node scripts/run-migration.js",
     "migrate:auth": "node scripts/run-auth-migration.js",
-    "init:admin": "node scripts/create-admin-user.js"
+    "init:admin": "node scripts/create-admin-user.js",
+    "init:n8n-key": "ts-node scripts/create-n8n-api-key.ts"
   },
   "keywords": [
     "erp",
