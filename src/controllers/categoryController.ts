@@ -162,10 +162,25 @@ export class CategoryController {
 
   // POST /api/woocommerce/categories/sync - Sincronizar desde WooCommerce
   public async syncFromWooCommerce(req: Request, res: Response): Promise<void> {
+    const startTime = Date.now();
+    const requestId = `WC-CAT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
+      console.log(`[${requestId}] ========== INICIANDO SINCRONIZACIÓN DE CATEGORÍAS DESDE WOOCOMMERCE ==========`);
+      console.log(`[${requestId}] IP del cliente: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
+      console.log(`[${requestId}] User-Agent: ${req.get('user-agent') || 'unknown'}`);
+      console.log(`[${requestId}] Headers recibidos:`, {
+        'x-webhook-secret': req.headers['x-webhook-secret'] ? '***' : 'no presente',
+        'x-api-key': req.headers['x-api-key'] ? '***' : 'no presente',
+        'content-type': req.headers['content-type']
+      });
+
       const { categories } = req.body;
       
       if (!Array.isArray(categories)) {
+        console.error(`[${requestId}] ERROR: Formato inválido. Se espera un array de categorías.`);
+        console.error(`[${requestId}] Body recibido:`, JSON.stringify(req.body, null, 2));
+        
         const response: ApiResponse = {
           success: false,
           message: 'Formato inválido. Se espera un array de categorías.',
@@ -175,7 +190,28 @@ export class CategoryController {
         return;
       }
 
-      const result = await this.categoryService.syncFromWooCommerce(categories);
+      console.log(`[${requestId}] Total de categorías recibidas: ${categories.length}`);
+      console.log(`[${requestId}] Categorías recibidas:`, categories.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug,
+        parent: cat.parent || 0
+      })));
+
+      console.log(`[${requestId}] Iniciando sincronización...`);
+      const result = await this.categoryService.syncFromWooCommerce(categories, requestId);
+      
+      const duration = Date.now() - startTime;
+      console.log(`[${requestId}] ✅ Sincronización completada en ${duration}ms`);
+      console.log(`[${requestId}] Resultado:`, {
+        creadas: result.created,
+        actualizadas: result.updated,
+        errores: result.errors.length
+      });
+      
+      if (result.errors.length > 0) {
+        console.warn(`[${requestId}] ⚠️ Errores durante la sincronización:`, result.errors);
+      }
       
       const response: ApiResponse = {
         success: true,
@@ -184,8 +220,13 @@ export class CategoryController {
         timestamp: new Date().toISOString()
       };
       
+      console.log(`[${requestId}] ========== SINCRONIZACIÓN FINALIZADA ==========`);
       res.status(200).json(response);
     } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${requestId}] ❌ ERROR en sincronización después de ${duration}ms:`, error);
+      console.error(`[${requestId}] Stack trace:`, error instanceof Error ? error.stack : 'No stack available');
+      
       const response: ApiResponse = {
         success: false,
         message: 'Error sincronizando categorías',
@@ -234,19 +275,35 @@ export class CategoryController {
 
   // POST /api/integration/webhook/woocommerce/category - Webhook directo de WooCommerce
   public async wooCommerceCategoryWebhook(req: Request, res: Response): Promise<void> {
+    const startTime = Date.now();
+    const requestId = `WC-WEBHOOK-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
+      console.log(`[${requestId}] ========== WEBHOOK DE CATEGORÍA RECIBIDO DE WOOCOMMERCE ==========`);
+      console.log(`[${requestId}] IP del cliente: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
+      console.log(`[${requestId}] User-Agent: ${req.get('user-agent') || 'unknown'}`);
+      console.log(`[${requestId}] Headers recibidos:`, {
+        'x-webhook-secret': req.headers['x-webhook-secret'] ? '***' : 'no presente',
+        'x-api-key': req.headers['x-api-key'] ? '***' : 'no presente',
+        'content-type': req.headers['content-type']
+      });
+
       // WooCommerce envía el payload directamente con la categoría completa
       const wcCategory = req.body;
       
-      console.log('Webhook de categoría recibido de WooCommerce:', {
+      console.log(`[${requestId}] Payload recibido:`, {
         id: wcCategory.id,
         name: wcCategory.name,
         slug: wcCategory.slug,
-        parent: wcCategory.parent
+        parent: wcCategory.parent,
+        description: wcCategory.description ? wcCategory.description.substring(0, 50) + '...' : 'sin descripción'
       });
 
       // Validar que tenga los campos mínimos necesarios
       if (!wcCategory.id || !wcCategory.name) {
+        console.error(`[${requestId}] ❌ ERROR: Formato inválido. Campos requeridos: id, name`);
+        console.error(`[${requestId}] Body completo:`, JSON.stringify(req.body, null, 2));
+        
         const response: ApiResponse = {
           success: false,
           message: 'Formato inválido. La categoría debe tener id y name.',
@@ -266,8 +323,17 @@ export class CategoryController {
         parent: wcCategory.parent || 0
       }];
       
+      console.log(`[${requestId}] Iniciando sincronización de categoría individual...`);
       // Sincronizar categoría (crear o actualizar)
-      const result = await this.categoryService.syncFromWooCommerce(categories);
+      const result = await this.categoryService.syncFromWooCommerce(categories, requestId);
+      
+      const duration = Date.now() - startTime;
+      console.log(`[${requestId}] ✅ Sincronización completada en ${duration}ms`);
+      console.log(`[${requestId}] Resultado:`, {
+        creadas: result.created,
+        actualizadas: result.updated,
+        errores: result.errors.length
+      });
       
       const response: ApiResponse = {
         success: true,
@@ -280,10 +346,14 @@ export class CategoryController {
         timestamp: new Date().toISOString()
       };
       
+      console.log(`[${requestId}] ========== WEBHOOK PROCESADO EXITOSAMENTE ==========`);
       // Responder rápido a WooCommerce (importante para webhooks)
       res.status(200).json(response);
     } catch (error) {
-      console.error('WooCommerce category webhook error:', error);
+      const duration = Date.now() - startTime;
+      console.error(`[${requestId}] ❌ ERROR procesando webhook después de ${duration}ms:`, error);
+      console.error(`[${requestId}] Stack trace:`, error instanceof Error ? error.stack : 'No stack available');
+      
       const response: ApiResponse = {
         success: false,
         message: 'Error procesando webhook de categoría de WooCommerce',

@@ -57,21 +57,32 @@ export class CategoryService {
   }
 
   // Método específico para sincronización desde WooCommerce
-  async syncFromWooCommerce(categories: Array<{
-    id: number;
-    name: string;
-    slug: string;
-    parent?: number;
-  }>): Promise<{ created: number; updated: number; errors: any[] }> {
+  async syncFromWooCommerce(
+    categories: Array<{
+      id: number;
+      name: string;
+      slug: string;
+      parent?: number;
+    }>,
+    requestId?: string
+  ): Promise<{ created: number; updated: number; errors: any[] }> {
+    const logPrefix = requestId ? `[${requestId}]` : '[CAT-SYNC]';
     let created = 0;
     let updated = 0;
     const errors: any[] = [];
 
-    for (const wcCategory of categories) {
+    console.log(`${logPrefix} Procesando ${categories.length} categorías...`);
+
+    for (let i = 0; i < categories.length; i++) {
+      const wcCategory = categories[i];
+      const categoryLog = `${logPrefix} [${i + 1}/${categories.length}] WC ID: ${wcCategory.id} - "${wcCategory.name}"`;
+      
       try {
+        console.log(`${categoryLog} Buscando categoría existente...`);
         const existing = await this.categoryRepository.findByWooCommerceId(wcCategory.id);
         
         if (existing) {
+          console.log(`${categoryLog} ✅ Categoría existente encontrada (ERP ID: ${existing.id}). Actualizando...`);
           // Actualizar categoría existente
           await this.categoryRepository.update(existing.id, {
             name: wcCategory.name,
@@ -79,10 +90,12 @@ export class CategoryService {
             parent_id: wcCategory.parent !== undefined ? (wcCategory.parent === 0 ? null : wcCategory.parent) : undefined
           });
           updated++;
+          console.log(`${categoryLog} ✅ Actualizada exitosamente`);
         } else {
           // Verificar si existe por nombre antes de crear
           const existingByName = await this.categoryRepository.findByName(wcCategory.name);
           if (existingByName) {
+            console.log(`${categoryLog} ⚠️ Categoría existe por nombre pero sin woocommerce_id (ERP ID: ${existingByName.id}). Agregando woocommerce_id...`);
             // Si existe por nombre pero no por woocommerce_id, actualizar para agregar el woocommerce_id
             await this.categoryRepository.update(existingByName.id, {
               woocommerce_id: wcCategory.id,
@@ -90,25 +103,41 @@ export class CategoryService {
               parent_id: wcCategory.parent !== undefined ? (wcCategory.parent === 0 ? null : wcCategory.parent) : undefined
             });
             updated++;
+            console.log(`${categoryLog} ✅ woocommerce_id agregado exitosamente`);
           } else {
+            console.log(`${categoryLog} ➕ Nueva categoría. Creando...`);
             // Crear nueva categoría
-            await this.categoryRepository.create({
+            const newCategory = await this.categoryRepository.create({
               name: wcCategory.name,
               woocommerce_id: wcCategory.id,
               woocommerce_slug: wcCategory.slug,
               parent_id: wcCategory.parent !== undefined ? (wcCategory.parent === 0 ? null : wcCategory.parent) : undefined
             });
             created++;
+            console.log(`${categoryLog} ✅ Creada exitosamente (ERP ID: ${newCategory.id})`);
           }
         }
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+        console.error(`${categoryLog} ❌ ERROR: ${errorMsg}`);
+        if (error instanceof Error && error.stack) {
+          console.error(`${categoryLog} Stack:`, error.stack);
+        }
+        
         errors.push({
           woocommerce_id: wcCategory.id,
           name: wcCategory.name,
-          error: error instanceof Error ? error.message : 'Error desconocido'
+          error: errorMsg
         });
       }
     }
+
+    console.log(`${logPrefix} Resumen de sincronización:`, {
+      total: categories.length,
+      creadas: created,
+      actualizadas: updated,
+      errores: errors.length
+    });
 
     return { created, updated, errors };
   }
