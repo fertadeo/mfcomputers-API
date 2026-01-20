@@ -18,12 +18,24 @@ define('ERP_WEBHOOK_SECRET', 'mf-wooc-secret'); // Debe coincidir con WEBHOOK_SE
  * Se ejecuta cuando se crea, edita o borra una categoría
  */
 function sync_categories_simple($term_id, $tt_id = '', $taxonomy = '') {
+    // Normalizar $taxonomy - puede venir como array, string o vacío
+    $taxonomy_str = '';
+    if (is_array($taxonomy)) {
+        // Si es array, tomar el primer elemento o usar 'product_cat' por defecto
+        $taxonomy_str = !empty($taxonomy) ? (string)reset($taxonomy) : 'product_cat';
+    } elseif (is_string($taxonomy)) {
+        $taxonomy_str = $taxonomy;
+    } else {
+        // Si está vacío o es otro tipo, usar 'product_cat' por defecto
+        $taxonomy_str = 'product_cat';
+    }
+    
     $action = current_filter(); // 'created_product_cat', 'edited_product_cat', o 'delete_product_cat'
     
     error_log('=== INICIO SINCRONIZACIÓN ===');
     error_log('Acción: ' . $action);
     error_log('Categoría ID: ' . $term_id);
-    error_log('Taxonomía: ' . ($taxonomy ? $taxonomy : 'product_cat'));
+    error_log('Taxonomía: ' . $taxonomy_str);
     
     // Si es borrado, capturar información antes de que se elimine
     $deleted_category_info = null;

@@ -57,6 +57,13 @@ router.put('/:id',
   categoryController.updateCategory.bind(categoryController)
 );
 
+router.delete('/:id',
+  authenticateApiKey,
+  param('id').isInt().withMessage('ID debe ser un número'),
+  validate([param('id')]),
+  categoryController.deleteCategory.bind(categoryController)
+);
+
 // Ruta para sincronización desde WooCommerce
 router.post('/sync/woocommerce',
   authenticateApiKey,

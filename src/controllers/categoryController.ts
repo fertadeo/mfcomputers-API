@@ -85,17 +85,26 @@ export class CategoryController {
       }
 
       const { name, description, woocommerce_id, woocommerce_slug, parent_id } = req.body;
+      
+      // Si se proporciona woocommerce_id, no sincronizar (viene de WooCommerce)
+      const syncToWooCommerce = !woocommerce_id;
+      
       const category = await this.categoryService.createCategory({
         name,
         description,
         woocommerce_id,
         woocommerce_slug,
         parent_id
-      });
+      }, syncToWooCommerce);
+      
+      let message = 'Categoría creada exitosamente';
+      if (syncToWooCommerce && category.woocommerce_id) {
+        message += ` y sincronizada a WooCommerce (ID: ${category.woocommerce_id})`;
+      }
       
       const response: ApiResponse = {
         success: true,
-        message: 'Categoría creada exitosamente',
+        message: message,
         data: { category },
         timestamp: new Date().toISOString()
       };
@@ -131,6 +140,31 @@ export class CategoryController {
       const id = parseInt(req.params.id, 10);
       const { name, description, woocommerce_id, woocommerce_slug, parent_id, is_active } = req.body;
       
+      // Obtener categoría existente para verificar si tiene woocommerce_id
+      const existingCategory = await this.categoryService.getCategoryById(id);
+      if (!existingCategory) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Categoría no encontrada',
+          timestamp: new Date().toISOString()
+        };
+        res.status(404).json(response);
+        return;
+      }
+      
+      // Si se está desactivando y tiene woocommerce_id, eliminar de WooCommerce
+      if (is_active === false && existingCategory.woocommerce_id) {
+        try {
+          await this.categoryService.deleteFromWooCommerce(id);
+        } catch (error) {
+          console.error(`[CategoryController] Error eliminando categoría de WooCommerce:`, error);
+          // Continuar con la actualización aunque falle la eliminación en WooCommerce
+        }
+      }
+      
+      // Sincronizar solo si tiene woocommerce_id (no si se está desactivando)
+      const syncToWooCommerce = existingCategory.woocommerce_id !== undefined && is_active !== false;
+      
       const category = await this.categoryService.updateCategory(id, {
         name,
         description,
@@ -138,11 +172,16 @@ export class CategoryController {
         woocommerce_slug,
         parent_id,
         is_active
-      });
+      }, syncToWooCommerce);
+      
+      let message = 'Categoría actualizada exitosamente';
+      if (syncToWooCommerce && category.woocommerce_id) {
+        message += ` y sincronizada a WooCommerce`;
+      }
       
       const response: ApiResponse = {
         success: true,
-        message: 'Categoría actualizada exitosamente',
+        message: message,
         data: { category },
         timestamp: new Date().toISOString()
       };
@@ -157,6 +196,59 @@ export class CategoryController {
         timestamp: new Date().toISOString()
       };
       res.status(statusCode).json(response);
+    }
+  }
+
+  // DELETE /api/categories/:id
+  public async deleteCategory(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      
+      const category = await this.categoryService.getCategoryById(id);
+      if (!category) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Categoría no encontrada',
+          timestamp: new Date().toISOString()
+        };
+        res.status(404).json(response);
+        return;
+      }
+
+      // Si tiene woocommerce_id, eliminar de WooCommerce primero
+      if (category.woocommerce_id) {
+        try {
+          await this.categoryService.deleteFromWooCommerce(id);
+        } catch (error) {
+          console.error(`[CategoryController] Error eliminando categoría de WooCommerce:`, error);
+          // Continuar con la eliminación en el ERP aunque falle en WooCommerce
+        }
+      }
+
+      // Desactivar en el ERP (soft delete)
+      await this.categoryService.updateCategory(id, { is_active: false }, false);
+      
+      const response: ApiResponse = {
+        success: true,
+        message: 'Categoría eliminada exitosamente',
+        data: { 
+          id: category.id,
+          name: category.name,
+          woocommerce_id: category.woocommerce_id || null
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Delete category error:', error);
+      const response: ApiResponse = {
+        success: false,
+        message: 'Error eliminando categoría',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(500).json(response);
     }
   }
 

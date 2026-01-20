@@ -1,11 +1,14 @@
 import { CategoryRepository } from '../repositories/CategoryRepository';
 import { Category, CreateCategoryData } from '../entities/Category';
+import { WooCommerceService } from './WooCommerceService';
 
 export class CategoryService {
   private categoryRepository: CategoryRepository;
+  private wooCommerceService: WooCommerceService;
 
   constructor() {
     this.categoryRepository = new CategoryRepository();
+    this.wooCommerceService = new WooCommerceService();
   }
 
   async getAllCategories(): Promise<{ categories: Category[] }> {
@@ -21,7 +24,7 @@ export class CategoryService {
     return await this.categoryRepository.findByWooCommerceId(woocommerceId);
   }
 
-  async createCategory(data: CreateCategoryData & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null }): Promise<Category> {
+  async createCategory(data: CreateCategoryData & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null }, syncToWooCommerce: boolean = true): Promise<Category> {
     // Verificar si ya existe por nombre
     const existingByName = await this.categoryRepository.findByName(data.name);
     if (existingByName) {
@@ -36,10 +39,30 @@ export class CategoryService {
       }
     }
 
-    return await this.categoryRepository.create(data);
+    // Crear categoría en el ERP
+    const category = await this.categoryRepository.create(data);
+
+    // Sincronizar a WooCommerce si está configurado y no tiene woocommerce_id (si ya tiene, significa que viene de WooCommerce)
+    if (syncToWooCommerce && !data.woocommerce_id && this.wooCommerceService.isConfigured()) {
+      try {
+        console.log(`[CategoryService] Sincronizando categoría "${category.name}" a WooCommerce...`);
+        await this.syncToWooCommerce(category.id);
+        // Recargar la categoría para obtener el woocommerce_id actualizado
+        const updatedCategory = await this.categoryRepository.findById(category.id);
+        if (updatedCategory) {
+          return updatedCategory;
+        }
+      } catch (error) {
+        console.error(`[CategoryService] Error sincronizando categoría a WooCommerce:`, error);
+        // No fallar la creación si la sincronización falla, solo loguear el error
+        // La categoría se creó exitosamente en el ERP
+      }
+    }
+
+    return category;
   }
 
-  async updateCategory(id: number, data: Partial<CreateCategoryData> & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null; is_active?: boolean }): Promise<Category> {
+  async updateCategory(id: number, data: Partial<CreateCategoryData> & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null; is_active?: boolean }, syncToWooCommerce: boolean = true): Promise<Category> {
     const existing = await this.categoryRepository.findById(id);
     if (!existing) {
       throw new Error('Categoría no encontrada');
@@ -53,7 +76,26 @@ export class CategoryService {
       }
     }
 
-    return await this.categoryRepository.update(id, data);
+    // Actualizar en el ERP
+    const updatedCategory = await this.categoryRepository.update(id, data);
+
+    // Sincronizar a WooCommerce si está configurado y la categoría tiene woocommerce_id
+    if (syncToWooCommerce && existing.woocommerce_id && this.wooCommerceService.isConfigured()) {
+      try {
+        console.log(`[CategoryService] Sincronizando actualización de categoría "${updatedCategory.name}" a WooCommerce...`);
+        await this.syncToWooCommerce(id);
+        // Recargar la categoría para obtener datos actualizados
+        const reloadedCategory = await this.categoryRepository.findById(id);
+        if (reloadedCategory) {
+          return reloadedCategory;
+        }
+      } catch (error) {
+        console.error(`[CategoryService] Error sincronizando categoría a WooCommerce:`, error);
+        // No fallar la actualización si la sincronización falla
+      }
+    }
+
+    return updatedCategory;
   }
 
   // Método específico para sincronización desde WooCommerce
@@ -192,5 +234,126 @@ export class CategoryService {
     });
 
     return { created, updated, deactivated, errors };
+  }
+
+  /**
+   * Sincroniza una categoría del ERP a WooCommerce
+   * Si la categoría tiene woocommerce_id, la actualiza; si no, la crea
+   */
+  async syncToWooCommerce(categoryId: number): Promise<{ woocommerce_id: number; woocommerce_slug: string }> {
+    const category = await this.categoryRepository.findById(categoryId);
+    if (!category) {
+      throw new Error('Categoría no encontrada');
+    }
+
+    if (!this.wooCommerceService.isConfigured()) {
+      throw new Error('WooCommerce no está configurado');
+    }
+
+    // Si la categoría ya tiene woocommerce_id, actualizar en WooCommerce
+    if (category.woocommerce_id) {
+      console.log(`[CategoryService] Actualizando categoría ${category.id} (WC ID: ${category.woocommerce_id}) en WooCommerce...`);
+      
+      // Resolver parent_id: si tiene parent_id en el ERP, necesitamos el woocommerce_id del padre
+      let parentWcId: number | undefined = undefined;
+      if (category.parent_id) {
+        const parentCategory = await this.categoryRepository.findById(category.parent_id);
+        if (parentCategory && parentCategory.woocommerce_id) {
+          parentWcId = parentCategory.woocommerce_id;
+        }
+      }
+
+      const wcResult = await this.wooCommerceService.updateCategory(category.woocommerce_id, {
+        name: category.name,
+        slug: category.woocommerce_slug,
+        parent: parentWcId,
+        description: category.description
+      });
+
+      // Actualizar slug si cambió
+      if (wcResult.slug !== category.woocommerce_slug) {
+        await this.categoryRepository.update(categoryId, {
+          woocommerce_slug: wcResult.slug
+        });
+      }
+
+      return {
+        woocommerce_id: wcResult.id,
+        woocommerce_slug: wcResult.slug
+      };
+    } else {
+      // Si no tiene woocommerce_id, crear en WooCommerce
+      console.log(`[CategoryService] Creando categoría ${category.id} en WooCommerce...`);
+      
+      // Resolver parent_id: si tiene parent_id en el ERP, necesitamos el woocommerce_id del padre
+      let parentWcId: number | undefined = undefined;
+      if (category.parent_id) {
+        const parentCategory = await this.categoryRepository.findById(category.parent_id);
+        if (parentCategory && parentCategory.woocommerce_id) {
+          parentWcId = parentCategory.woocommerce_id;
+        }
+      }
+
+      // Generar slug si no existe
+      const slug = category.woocommerce_slug || category.name.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Eliminar acentos
+        .replace(/[^a-z0-9]+/g, '-') // Reemplazar caracteres especiales
+        .replace(/^-+|-+$/g, ''); // Eliminar guiones al inicio/fin
+
+      const wcResult = await this.wooCommerceService.createCategory({
+        name: category.name,
+        slug: slug,
+        parent: parentWcId,
+        description: category.description
+      });
+
+      // Actualizar la categoría en el ERP con el woocommerce_id
+      await this.categoryRepository.update(categoryId, {
+        woocommerce_id: wcResult.id,
+        woocommerce_slug: wcResult.slug
+      });
+
+      return {
+        woocommerce_id: wcResult.id,
+        woocommerce_slug: wcResult.slug
+      };
+    }
+  }
+
+  /**
+   * Elimina una categoría en WooCommerce y limpia el woocommerce_id en el ERP
+   */
+  async deleteFromWooCommerce(categoryId: number): Promise<void> {
+    const category = await this.categoryRepository.findById(categoryId);
+    if (!category) {
+      throw new Error('Categoría no encontrada');
+    }
+
+    if (!category.woocommerce_id) {
+      console.log(`[CategoryService] Categoría ${categoryId} no tiene woocommerce_id, no hay nada que eliminar en WooCommerce`);
+      return;
+    }
+
+    if (!this.wooCommerceService.isConfigured()) {
+      throw new Error('WooCommerce no está configurado');
+    }
+
+    console.log(`[CategoryService] Eliminando categoría ${categoryId} (WC ID: ${category.woocommerce_id}) de WooCommerce...`);
+    
+    try {
+      await this.wooCommerceService.deleteCategory(category.woocommerce_id, true);
+      
+      // Limpiar woocommerce_id y woocommerce_slug en el ERP
+      await this.categoryRepository.update(categoryId, {
+        woocommerce_id: undefined,
+        woocommerce_slug: undefined
+      });
+      
+      console.log(`[CategoryService] ✅ Categoría eliminada de WooCommerce exitosamente`);
+    } catch (error) {
+      console.error(`[CategoryService] Error eliminando categoría de WooCommerce:`, error);
+      throw error;
+    }
   }
 }

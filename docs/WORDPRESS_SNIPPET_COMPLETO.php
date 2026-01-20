@@ -25,9 +25,22 @@ define('ERP_WEBHOOK_SECRET', 'mf-wooc-secret'); // Debe coincidir con WEBHOOK_SE
  * Función principal para sincronizar todas las categorías
  */
 function sync_all_product_categories_to_erp($term_id, $tt_id = '', $taxonomy = '') {
+    // Normalizar $taxonomy - puede venir como array, string o vacío
+    $taxonomy_str = '';
+    if (is_array($taxonomy)) {
+        // Si es array, tomar el primer elemento o usar 'product_cat' por defecto
+        $taxonomy_str = !empty($taxonomy) ? (string)reset($taxonomy) : 'product_cat';
+    } elseif (is_string($taxonomy)) {
+        $taxonomy_str = $taxonomy;
+    } else {
+        // Si está vacío o es otro tipo, usar 'product_cat' por defecto
+        $taxonomy_str = 'product_cat';
+    }
+    
     // Solo procesar categorías de productos
-    if ($taxonomy !== 'product_cat' && $taxonomy !== '') {
-        error_log('[ERP-SYNC] Ignorando taxonomía: ' . $taxonomy);
+    // Si la taxonomía no es 'product_cat' y no está vacía, ignorar
+    if ($taxonomy_str !== 'product_cat' && $taxonomy_str !== '') {
+        error_log('[ERP-SYNC] Ignorando taxonomía: ' . $taxonomy_str);
         return;
     }
     
@@ -36,7 +49,7 @@ function sync_all_product_categories_to_erp($term_id, $tt_id = '', $taxonomy = '
     error_log('[ERP-SYNC] ========== INICIANDO SINCRONIZACIÓN ==========');
     error_log('[ERP-SYNC] Acción: ' . $action);
     error_log('[ERP-SYNC] Categoría ID: ' . $term_id);
-    error_log('[ERP-SYNC] Taxonomía: ' . ($taxonomy ? $taxonomy : 'product_cat'));
+    error_log('[ERP-SYNC] Taxonomía: ' . $taxonomy_str);
     
     // Si es borrado, capturar información antes de que se elimine
     $deleted_category_info = null;
@@ -163,12 +176,22 @@ function sync_all_product_categories_to_erp($term_id, $tt_id = '', $taxonomy = '
  * Función para verificar que los hooks estén funcionando
  */
 function test_category_hooks($term_id, $tt_id = '', $taxonomy = '') {
-    if ($taxonomy !== 'product_cat') {
+    // Normalizar $taxonomy
+    $taxonomy_str = '';
+    if (is_array($taxonomy)) {
+        $taxonomy_str = !empty($taxonomy) ? (string)reset($taxonomy) : 'product_cat';
+    } elseif (is_string($taxonomy)) {
+        $taxonomy_str = $taxonomy;
+    } else {
+        $taxonomy_str = 'product_cat';
+    }
+    
+    if ($taxonomy_str !== 'product_cat' && $taxonomy_str !== '') {
         return;
     }
     error_log('[HOOK-TEST] ✅ HOOK DISPARADO: ' . current_filter());
     error_log('[HOOK-TEST] Term ID: ' . $term_id);
-    error_log('[HOOK-TEST] Taxonomy: ' . $taxonomy);
+    error_log('[HOOK-TEST] Taxonomy: ' . $taxonomy_str);
 }
 
 // Registrar hooks
