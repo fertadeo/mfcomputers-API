@@ -206,6 +206,7 @@ export class CategoryController {
       console.log(`[${requestId}] Resultado:`, {
         creadas: result.created,
         actualizadas: result.updated,
+        desactivadas: result.deactivated,
         errores: result.errors.length
       });
       
@@ -213,9 +214,15 @@ export class CategoryController {
         console.warn(`[${requestId}] ⚠️ Errores durante la sincronización:`, result.errors);
       }
       
+      let message = `Sincronización completada. ${result.created} creadas, ${result.updated} actualizadas`;
+      if (result.deactivated > 0) {
+        message += `, ${result.deactivated} desactivadas`;
+      }
+      message += '.';
+      
       const response: ApiResponse = {
         success: true,
-        message: `Sincronización completada. ${result.created} creadas, ${result.updated} actualizadas.`,
+        message: message,
         data: result,
         timestamp: new Date().toISOString()
       };

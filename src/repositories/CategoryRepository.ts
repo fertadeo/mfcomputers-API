@@ -14,6 +14,17 @@ export class CategoryRepository {
     return rows.map(this.mapRowToCategory);
   }
 
+  async findAllIncludingInactive(): Promise<Category[]> {
+    const rows = await executeQuery(
+      `SELECT id, name, description, is_active, woocommerce_id, woocommerce_slug, 
+              parent_id, created_at, updated_at 
+       FROM categories 
+       ORDER BY name ASC`
+    ) as any[];
+    
+    return rows.map(this.mapRowToCategory);
+  }
+
   async findById(id: number): Promise<Category | null> {
     const rows = await executeQuery(
       `SELECT id, name, description, is_active, woocommerce_id, woocommerce_slug, 

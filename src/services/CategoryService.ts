@@ -65,14 +65,20 @@ export class CategoryService {
       parent?: number;
     }>,
     requestId?: string
-  ): Promise<{ created: number; updated: number; errors: any[] }> {
+  ): Promise<{ created: number; updated: number; deactivated: number; errors: any[] }> {
     const logPrefix = requestId ? `[${requestId}]` : '[CAT-SYNC]';
     let created = 0;
     let updated = 0;
+    let deactivated = 0;
     const errors: any[] = [];
 
-    console.log(`${logPrefix} Procesando ${categories.length} categorías...`);
+    console.log(`${logPrefix} Procesando ${categories.length} categorías desde WooCommerce...`);
 
+    // Obtener IDs de WooCommerce de las categorías recibidas
+    const receivedWcIds = new Set(categories.map(cat => cat.id));
+    console.log(`${logPrefix} IDs de WooCommerce recibidos: ${Array.from(receivedWcIds).join(', ')}`);
+
+    // Procesar cada categoría recibida
     for (let i = 0; i < categories.length; i++) {
       const wcCategory = categories[i];
       const categoryLog = `${logPrefix} [${i + 1}/${categories.length}] WC ID: ${wcCategory.id} - "${wcCategory.name}"`;
@@ -83,14 +89,24 @@ export class CategoryService {
         
         if (existing) {
           console.log(`${categoryLog} ✅ Categoría existente encontrada (ERP ID: ${existing.id}). Actualizando...`);
+          
+          // Si estaba inactiva, reactivarla
+          const needsReactivation = !existing.is_active;
+          
           // Actualizar categoría existente
           await this.categoryRepository.update(existing.id, {
             name: wcCategory.name,
             woocommerce_slug: wcCategory.slug,
-            parent_id: wcCategory.parent !== undefined ? (wcCategory.parent === 0 ? null : wcCategory.parent) : undefined
+            parent_id: wcCategory.parent !== undefined ? (wcCategory.parent === 0 ? null : wcCategory.parent) : undefined,
+            is_active: true // Reactivar si estaba inactiva
           });
           updated++;
-          console.log(`${categoryLog} ✅ Actualizada exitosamente`);
+          
+          if (needsReactivation) {
+            console.log(`${categoryLog} ✅ Reactivada y actualizada exitosamente`);
+          } else {
+            console.log(`${categoryLog} ✅ Actualizada exitosamente`);
+          }
         } else {
           // Verificar si existe por nombre antes de crear
           const existingByName = await this.categoryRepository.findByName(wcCategory.name);
@@ -100,7 +116,8 @@ export class CategoryService {
             await this.categoryRepository.update(existingByName.id, {
               woocommerce_id: wcCategory.id,
               woocommerce_slug: wcCategory.slug,
-              parent_id: wcCategory.parent !== undefined ? (wcCategory.parent === 0 ? null : wcCategory.parent) : undefined
+              parent_id: wcCategory.parent !== undefined ? (wcCategory.parent === 0 ? null : wcCategory.parent) : undefined,
+              is_active: true
             });
             updated++;
             console.log(`${categoryLog} ✅ woocommerce_id agregado exitosamente`);
@@ -132,13 +149,48 @@ export class CategoryService {
       }
     }
 
+    // Desactivar categorías que ya no existen en WooCommerce
+    console.log(`${logPrefix} Verificando categorías a desactivar (que no están en WooCommerce)...`);
+    // Necesitamos todas las categorías, incluyendo inactivas, para comparar
+    const allCategories = await this.categoryRepository.findAllIncludingInactive();
+    const categoriesWithWcId = allCategories.filter(cat => cat.woocommerce_id !== undefined);
+    
+    console.log(`${logPrefix} Categorías en ERP con woocommerce_id: ${categoriesWithWcId.length}`);
+    
+    for (const erpCategory of categoriesWithWcId) {
+      if (erpCategory.woocommerce_id && !receivedWcIds.has(erpCategory.woocommerce_id)) {
+        // Esta categoría existe en el ERP pero no en WooCommerce (fue eliminada)
+        if (erpCategory.is_active) {
+          console.log(`${logPrefix} 🗑️ Desactivando categoría eliminada en WooCommerce: ERP ID ${erpCategory.id}, WC ID ${erpCategory.woocommerce_id} - "${erpCategory.name}"`);
+          try {
+            await this.categoryRepository.update(erpCategory.id, {
+              is_active: false
+            });
+            deactivated++;
+            console.log(`${logPrefix} ✅ Categoría desactivada exitosamente`);
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+            console.error(`${logPrefix} ❌ Error desactivando categoría ${erpCategory.id}: ${errorMsg}`);
+            errors.push({
+              woocommerce_id: erpCategory.woocommerce_id,
+              name: erpCategory.name,
+              error: `Error al desactivar: ${errorMsg}`
+            });
+          }
+        } else {
+          console.log(`${logPrefix} ℹ️ Categoría ya estaba inactiva: WC ID ${erpCategory.woocommerce_id} - "${erpCategory.name}"`);
+        }
+      }
+    }
+
     console.log(`${logPrefix} Resumen de sincronización:`, {
-      total: categories.length,
+      total_recibidas: categories.length,
       creadas: created,
       actualizadas: updated,
+      desactivadas: deactivated,
       errores: errors.length
     });
 
-    return { created, updated, errors };
+    return { created, updated, deactivated, errors };
   }
 }
