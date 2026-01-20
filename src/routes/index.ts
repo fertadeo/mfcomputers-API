@@ -18,6 +18,7 @@ import supplierAccountRoutes from './supplierAccounts';
 import accruedExpenseRoutes from './accruedExpenses';
 import accruedLiabilityRoutes from './accruedLiabilities';
 import apiKeyRoutes from './apiKeys';
+import categoryRoutes from './categories';
 
 const router = Router();
 
@@ -41,6 +42,7 @@ router.use('/supplier-accounts', supplierAccountRoutes);
 router.use('/accrued-expenses', accruedExpenseRoutes);
 router.use('/accrued-liabilities', accruedLiabilityRoutes);
 router.use('/api-keys', apiKeyRoutes);
+router.use('/categories', categoryRoutes);
 
 // Health check for API routes
 router.get('/', (req, res) => {
@@ -67,6 +69,7 @@ router.get('/', (req, res) => {
       accruedExpenses: '/api/accrued-expenses',
       accruedLiabilities: '/api/accrued-liabilities',
       apiKeys: '/api/api-keys',
+      categories: '/api/categories',
       // Future routes will be added here
       stock: '/api/products/stock (available)',
       production: '/api/production (coming soon)',

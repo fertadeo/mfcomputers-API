@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { IntegrationController } from '../controllers/integrationController';
+import { CategoryController } from '../controllers/categoryController';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validation';
 import { authenticateApiKey, authenticateWebhook, optionalAuth } from '../middleware/auth';
 
 const router = Router();
 const integrationController = new IntegrationController();
+const categoryController = new CategoryController();
 
 // Validation rules
 const syncStockValidation = [
@@ -35,6 +37,12 @@ router.post('/products/sync',
 router.post('/webhook/woocommerce', 
   authenticateWebhook,
   integrationController.wooCommerceWebhook.bind(integrationController)
+);
+
+// POST /api/integration/webhook/woocommerce/category - Webhook directo de WooCommerce para categorías
+router.post('/webhook/woocommerce/category',
+  authenticateWebhook,
+  categoryController.wooCommerceCategoryWebhook.bind(categoryController)
 );
 
 // POST /api/integration/orders/woocommerce-mayorista - Recibir pedido mayorista desde WooCommerce/N8N
