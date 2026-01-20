@@ -50,7 +50,7 @@ export class CategoryRepository {
     return rows.length > 0 ? this.mapRowToCategory(rows[0]) : null;
   }
 
-  async create(data: CreateCategoryData & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number }): Promise<Category> {
+  async create(data: CreateCategoryData & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null }): Promise<Category> {
     const result = await executeQuery(
       `INSERT INTO categories (name, description, woocommerce_id, woocommerce_slug, parent_id, is_active) 
        VALUES (?, ?, ?, ?, ?, 1)`,
@@ -62,7 +62,7 @@ export class CategoryRepository {
     return category;
   }
 
-  async update(id: number, data: Partial<CreateCategoryData> & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number; is_active?: boolean }): Promise<Category> {
+  async update(id: number, data: Partial<CreateCategoryData> & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null; is_active?: boolean }): Promise<Category> {
     const updates: string[] = [];
     const values: any[] = [];
 

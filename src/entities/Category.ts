@@ -5,7 +5,7 @@ export interface Category {
   is_active: boolean;
   woocommerce_id?: number;
   woocommerce_slug?: string;
-  parent_id?: number;
+  parent_id?: number | null;
   created_at: string;
   updated_at?: string;
 }
@@ -15,5 +15,5 @@ export interface CreateCategoryData {
   description?: string;
   woocommerce_id?: number;
   woocommerce_slug?: string;
-  parent_id?: number;
+  parent_id?: number | null;
 }

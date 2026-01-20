@@ -21,7 +21,7 @@ export class CategoryService {
     return await this.categoryRepository.findByWooCommerceId(woocommerceId);
   }
 
-  async createCategory(data: CreateCategoryData & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number }): Promise<Category> {
+  async createCategory(data: CreateCategoryData & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null }): Promise<Category> {
     // Verificar si ya existe por nombre
     const existingByName = await this.categoryRepository.findByName(data.name);
     if (existingByName) {
@@ -39,7 +39,7 @@ export class CategoryService {
     return await this.categoryRepository.create(data);
   }
 
-  async updateCategory(id: number, data: Partial<CreateCategoryData> & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number; is_active?: boolean }): Promise<Category> {
+  async updateCategory(id: number, data: Partial<CreateCategoryData> & { woocommerce_id?: number; woocommerce_slug?: string; parent_id?: number | null; is_active?: boolean }): Promise<Category> {
     const existing = await this.categoryRepository.findById(id);
     if (!existing) {
       throw new Error('Categoría no encontrada');
