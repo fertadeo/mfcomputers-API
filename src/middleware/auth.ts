@@ -119,8 +119,21 @@ export const authenticateWebhook = async (req: AuthenticatedRequest, res: Respon
   const expectedSecret = process.env.WEBHOOK_SECRET || 'mfcomputers-webhook-secret-2024';
   const expectedApiKey = process.env.API_KEY || 'mfcomputers-api-key-2024';
 
+  // Log de todas las requests que lleguen al webhook (para debugging)
+  console.log(`[WEBHOOK-AUTH] Request recibida en: ${req.method} ${req.path}`);
+  console.log(`[WEBHOOK-AUTH] IP: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
+  console.log(`[WEBHOOK-AUTH] Headers recibidos:`, {
+    'x-webhook-secret': webhookSecret ? '***presente***' : 'no presente',
+    'x-api-key': apiKey ? '***presente***' : 'no presente',
+    'content-type': req.headers['content-type'],
+    'user-agent': req.get('user-agent')?.substring(0, 50) || 'unknown'
+  });
+  console.log(`[WEBHOOK-AUTH] NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+  console.log(`[WEBHOOK-AUTH] Body preview:`, req.body ? JSON.stringify(req.body).substring(0, 200) : 'no body');
+
   // Para webhooks, permitir sin autenticación en desarrollo, testing o si NODE_ENV no está configurado (entorno local)
   if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    console.log(`[WEBHOOK-AUTH] ✅ Autenticación bypass (modo desarrollo)`);
     req.user = {
       id: 'webhook-user',
       name: 'Webhook User',
@@ -165,6 +178,7 @@ export const authenticateWebhook = async (req: AuthenticatedRequest, res: Respon
 
   // O permitir autenticación con Webhook Secret
   if (webhookSecret && webhookSecret === expectedSecret) {
+    console.log(`[WEBHOOK-AUTH] ✅ Autenticación exitosa con Webhook Secret`);
     req.user = {
       id: 'webhook-user',
       name: 'Webhook User',
@@ -175,6 +189,12 @@ export const authenticateWebhook = async (req: AuthenticatedRequest, res: Respon
   }
 
   // Si no hay autenticación válida, rechazar
+  console.error(`[WEBHOOK-AUTH] ❌ AUTENTICACIÓN FALLIDA`);
+  console.error(`[WEBHOOK-AUTH] Webhook Secret recibido: ${webhookSecret ? 'presente' : 'no presente'}`);
+  console.error(`[WEBHOOK-AUTH] Webhook Secret esperado: ${expectedSecret.substring(0, 10)}...`);
+  console.error(`[WEBHOOK-AUTH] API Key recibida: ${apiKey ? 'presente' : 'no presente'}`);
+  console.error(`[WEBHOOK-AUTH] API Key esperada: ${expectedApiKey.substring(0, 10)}...`);
+  
   const response: ApiResponse = {
     success: false,
     message: 'Autenticación requerida',
