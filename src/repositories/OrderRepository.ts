@@ -152,17 +152,13 @@ export class OrderRepository {
         const totalPrice = quantity * unitPrice;
         totalAmount += totalPrice;
 
-        // Preparar campos adicionales de WooCommerce para items
-        const itemSubtotal = item.subtotal !== undefined ? Number(item.subtotal) : totalPrice;
-        const itemSubtotalTax = item.subtotal_tax !== undefined ? Number(item.subtotal_tax) : 0;
-        const itemTotalTax = item.total_tax !== undefined ? Number(item.total_tax) : 0;
+        // Nota: Los campos adicionales de WooCommerce (woocommerce_item_id, tax_class, etc.)
+        // ya están incluidos en el campo JSON del pedido, no necesitan columnas separadas
 
         await connection.execute(
           `INSERT INTO order_items (
-            order_id, product_id, quantity, unit_price, total_price, batch_number, notes,
-            woocommerce_item_id, woocommerce_product_id, woocommerce_variation_id,
-            product_name_wc, tax_class, subtotal, subtotal_tax, total_tax
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            order_id, product_id, quantity, unit_price, total_price, batch_number, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             Number(orderId),
             Number(item.product_id),
@@ -170,15 +166,7 @@ export class OrderRepository {
             Number(unitPrice),
             Number(totalPrice),
             this.toNull(item.batch_number),
-            this.toNull(item.notes),
-            this.toNull(item.woocommerce_item_id),
-            this.toNull(item.woocommerce_product_id),
-            this.toNull(item.woocommerce_variation_id),
-            this.toNull(item.product_name_wc),
-            this.toNull(item.tax_class),
-            Number(itemSubtotal),
-            Number(itemSubtotalTax),
-            Number(itemTotalTax)
+            this.toNull(item.notes)
           ]
         );
       }
