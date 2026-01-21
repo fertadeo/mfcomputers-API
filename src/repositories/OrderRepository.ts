@@ -117,40 +117,17 @@ export class OrderRepository {
         throw new Error('Algunos valores son undefined. Revisar logs.');
       }
 
-      // Preparar campos adicionales de WooCommerce
-      const wooCommerceFields = [
-        this.toNull(data.payment_method),
-        this.toNull(data.payment_method_title),
-        this.toNull(data.transaction_id),
-        this.toNull(data.customer_ip_address),
-        this.toNull(data.currency || 'ARS'),
-        this.toNull(data.discount_total) !== null ? Number(data.discount_total || 0) : 0,
-        this.toNull(data.tax_total) !== null ? Number(data.tax_total || 0) : 0,
-        this.convertToMySQLDate(data.date_paid),
-        this.convertToMySQLDate(data.date_completed),
-        this.toNull(data.billing_address_2),
-        this.toNull(data.billing_state),
-        this.toNull(data.billing_postcode),
-        this.toNull(data.billing_company),
-        this.toNull(data.shipping_address_2),
-        this.toNull(data.shipping_state),
-        this.toNull(data.shipping_postcode),
-        this.toNull(data.shipping_company)
-      ];
-
-      const allInsertValues = [...insertValues, ...wooCommerceFields];
+      // Nota: Los campos adicionales de WooCommerce (payment_method, etc.) 
+      // ya están incluidos en el campo JSON, no necesitan columnas separadas
+      // Solo insertamos los campos básicos de la tabla
 
       const [result] = await connection.execute(
         `INSERT INTO orders (
           order_number, woocommerce_order_id, canal_venta, json, client_id, status, delivery_date,
           delivery_address, delivery_city, delivery_contact, delivery_phone,
-          transport_company, transport_cost, notes, created_by,
-          payment_method, payment_method_title, transaction_id, customer_ip_address,
-          currency, discount_total, tax_total, date_paid, date_completed,
-          billing_address_2, billing_state, billing_postcode, billing_company,
-          shipping_address_2, shipping_state, shipping_postcode, shipping_company
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        allInsertValues
+          transport_company, transport_cost, notes, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        insertValues
       );
 
       const orderId = (result as any).insertId;
