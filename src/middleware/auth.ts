@@ -114,22 +114,50 @@ export const authenticateApiKey = async (req: AuthenticatedRequest, res: Respons
 
 // Middleware de autenticación para webhooks (más permisivo)
 export const authenticateWebhook = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-  const webhookSecret = req.headers['x-webhook-secret'] as string;
-  const apiKey = req.headers['x-api-key'] as string;
-  const expectedSecret = process.env.WEBHOOK_SECRET || 'mfcomputers-webhook-secret-2024';
+  // Express normaliza headers a minúsculas, pero intentar múltiples variantes por si acaso
+  const webhookSecret = (req.headers['x-webhook-secret'] || req.headers['X-Webhook-Secret'] || req.headers['X-WEBHOOK-SECRET']) as string;
+  const apiKey = (req.headers['x-api-key'] || req.headers['X-API-Key'] || req.headers['X-API-KEY']) as string;
+  const expectedSecret = process.env.WEBHOOK_SECRET || 'mf-wooc-secret';
   const expectedApiKey = process.env.API_KEY || 'mfcomputers-api-key-2024';
 
   // Log de todas las requests que lleguen al webhook (para debugging)
   console.log(`[WEBHOOK-AUTH] Request recibida en: ${req.method} ${req.path}`);
   console.log(`[WEBHOOK-AUTH] IP: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
-  console.log(`[WEBHOOK-AUTH] Headers recibidos:`, {
+  
+  // Log de TODOS los headers para debugging
+  console.log(`[WEBHOOK-AUTH] Todos los headers recibidos:`, Object.keys(req.headers).reduce((acc: any, key) => {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.includes('api') || lowerKey.includes('webhook') || lowerKey.includes('secret') || lowerKey.includes('key')) {
+      acc[key] = req.headers[key] ? '***presente***' : 'no presente';
+    }
+    return acc;
+  }, {}));
+  
+  console.log(`[WEBHOOK-AUTH] Headers específicos:`, {
     'x-webhook-secret': webhookSecret ? '***presente***' : 'no presente',
     'x-api-key': apiKey ? '***presente***' : 'no presente',
+    'X-Webhook-Secret': req.headers['x-webhook-secret'] ? '***presente***' : 'no presente',
+    'X-API-Key': req.headers['x-api-key'] ? '***presente***' : 'no presente',
+    'X-WEBHOOK-SECRET': req.headers['x-webhook-secret'] ? '***presente***' : 'no presente',
+    'X-API-KEY': req.headers['x-api-key'] ? '***presente***' : 'no presente',
     'content-type': req.headers['content-type'],
     'user-agent': req.get('user-agent')?.substring(0, 50) || 'unknown'
   });
+  
   console.log(`[WEBHOOK-AUTH] NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
   console.log(`[WEBHOOK-AUTH] Body preview:`, req.body ? JSON.stringify(req.body).substring(0, 200) : 'no body');
+  
+  // Detectar webhooks de prueba de WooCommerce (solo tienen webhook_id) y permitirlos sin auth
+  if (req.body && req.body.webhook_id && !req.body.id) {
+    console.log(`[WEBHOOK-AUTH] ✅ Webhook de prueba detectado, permitiendo sin autenticación`);
+    req.user = {
+      id: 'webhook-user-test',
+      name: 'Webhook Test User',
+      type: 'webhook'
+    };
+    next();
+    return;
+  }
 
   // Para webhooks, permitir sin autenticación en desarrollo, testing o si NODE_ENV no está configurado (entorno local)
   if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
@@ -143,7 +171,19 @@ export const authenticateWebhook = async (req: AuthenticatedRequest, res: Respon
     return;
   }
 
-  // Intentar validar API Key contra base de datos primero
+  // PRIMERO verificar Webhook Secret (si está presente, permite acceso sin API key)
+  if (webhookSecret && webhookSecret === expectedSecret) {
+    console.log(`[WEBHOOK-AUTH] ✅ Autenticación exitosa con Webhook Secret`);
+    req.user = {
+      id: 'webhook-user',
+      name: 'Webhook User',
+      type: 'webhook'
+    };
+    next();
+    return;
+  }
+
+  // SI NO hay secret válido, entonces validar API Key contra base de datos
   if (apiKey) {
     try {
       const apiKeyService = new ApiKeyService();
@@ -174,18 +214,6 @@ export const authenticateWebhook = async (req: AuthenticatedRequest, res: Respon
       next();
       return;
     }
-  }
-
-  // O permitir autenticación con Webhook Secret
-  if (webhookSecret && webhookSecret === expectedSecret) {
-    console.log(`[WEBHOOK-AUTH] ✅ Autenticación exitosa con Webhook Secret`);
-    req.user = {
-      id: 'webhook-user',
-      name: 'Webhook User',
-      type: 'webhook'
-    };
-    next();
-    return;
   }
 
   // Si no hay autenticación válida, rechazar
