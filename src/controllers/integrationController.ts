@@ -739,25 +739,46 @@ export class IntegrationController {
 
   // POST /api/integration/webhook/woocommerce/order - Recibir pedido directamente desde WooCommerce webhook
   public async receiveWooCommerceOrder(req: Request, res: Response): Promise<void> {
+    const requestId = `WC-ORDER-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
-      console.log('=== RECIBIENDO PEDIDO DESDE WOOCOMMERCE WEBHOOK ===');
-      console.log('Body completo:', JSON.stringify(req.body, null, 2));
-      console.log('Content-Type:', req.headers['content-type']);
-
+      console.log(`[${requestId}] ========== RECIBIENDO PEDIDO DESDE WOOCOMMERCE WEBHOOK ==========`);
+      console.log(`[${requestId}] IP: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
+      console.log(`[${requestId}] Content-Type: ${req.headers['content-type']}`);
+      console.log(`[${requestId}] Body type: ${typeof req.body}`);
+      console.log(`[${requestId}] Body keys: ${req.body ? Object.keys(req.body).join(', ') : 'body is null/undefined'}`);
+      
       // WooCommerce envía el pedido directamente en el body
       const wooCommerceOrder = req.body;
 
-      // Validar que sea un pedido válido de WooCommerce
-      if (!wooCommerceOrder || !wooCommerceOrder.id) {
+      // Validar que el body exista y tenga contenido
+      if (!req.body || Object.keys(req.body).length === 0) {
+        console.error(`[${requestId}] ❌ ERROR: Body vacío o no parseado`);
         const response: ApiResponse = {
           success: false,
-          message: 'Formato de pedido inválido',
-          error: 'El body debe contener un pedido válido de WooCommerce con campo "id"',
+          message: 'Body vacío',
+          error: 'No se recibió ningún dato en el body de la petición. Verifica que Express esté configurado para parsear JSON.',
           timestamp: new Date().toISOString()
         };
         res.status(400).json(response);
         return;
       }
+
+      // Validar que sea un pedido válido de WooCommerce
+      if (!wooCommerceOrder.id) {
+        console.error(`[${requestId}] ❌ ERROR: Pedido sin ID`);
+        console.error(`[${requestId}] Body recibido:`, JSON.stringify(req.body, null, 2));
+        const response: ApiResponse = {
+          success: false,
+          message: 'Formato de pedido inválido',
+          error: `El body debe contener un pedido válido de WooCommerce con campo "id". Campos recibidos: ${Object.keys(wooCommerceOrder).join(', ')}`,
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      console.log(`[${requestId}] Pedido ID: ${wooCommerceOrder.id}, Número: ${wooCommerceOrder.number || 'N/A'}`);
 
       // Transformar el formato de WooCommerce al formato interno del sistema
       const transformedOrder = {
@@ -795,14 +816,21 @@ export class IntegrationController {
         meta_data: wooCommerceOrder.meta_data || []
       };
 
-      console.log('Pedido transformado:', JSON.stringify(transformedOrder, null, 2));
+      console.log(`[${requestId}] Pedido transformado:`, {
+        order_number: transformedOrder.order_number,
+        woocommerce_order_id: transformedOrder.woocommerce_order_id,
+        customer_email: transformedOrder.customer.email,
+        line_items_count: transformedOrder.line_items?.length || 0
+      });
 
       // Validar datos requeridos
       if (!transformedOrder.customer.email) {
+        console.error(`[${requestId}] ❌ ERROR: Falta email del cliente`);
+        console.error(`[${requestId}] Billing recibido:`, JSON.stringify(wooCommerceOrder.billing, null, 2));
         const response: ApiResponse = {
           success: false,
           message: 'Email del cliente requerido',
-          error: 'El pedido de WooCommerce debe incluir un email en billing.email',
+          error: `El pedido de WooCommerce debe incluir un email en billing.email. Billing recibido: ${JSON.stringify(wooCommerceOrder.billing)}`,
           timestamp: new Date().toISOString()
         };
         res.status(400).json(response);
@@ -810,10 +838,12 @@ export class IntegrationController {
       }
 
       if (!transformedOrder.line_items || transformedOrder.line_items.length === 0) {
+        console.error(`[${requestId}] ❌ ERROR: Pedido sin productos`);
+        console.error(`[${requestId}] Line items recibidos:`, JSON.stringify(wooCommerceOrder.line_items, null, 2));
         const response: ApiResponse = {
           success: false,
           message: 'El pedido debe incluir al menos un producto',
-          error: 'El pedido de WooCommerce debe incluir line_items con al menos un producto',
+          error: `El pedido de WooCommerce debe incluir line_items con al menos un producto. Line items recibidos: ${wooCommerceOrder.line_items ? wooCommerceOrder.line_items.length : 0}`,
           timestamp: new Date().toISOString()
         };
         res.status(400).json(response);
@@ -876,12 +906,14 @@ export class IntegrationController {
 
       // Validar que se encontraron productos
       if (orderItems.length === 0) {
+        console.error(`[${requestId}] ❌ ERROR: No se encontraron productos válidos`);
+        console.error(`[${requestId}] Productos faltantes: ${missingProducts.join(', ')}`);
         const response: ApiResponse = {
           success: false,
           message: 'No se encontraron productos válidos para el pedido',
           error: missingProducts.length > 0 
-            ? `Productos no encontrados: ${missingProducts.join(', ')}`
-            : 'Todos los productos tienen SKU inválido',
+            ? `Productos no encontrados en el ERP: ${missingProducts.join(', ')}`
+            : 'Todos los productos tienen SKU inválido o vacío',
           timestamp: new Date().toISOString()
         };
         res.status(400).json(response);
@@ -943,10 +975,12 @@ export class IntegrationController {
         timestamp: new Date().toISOString()
       };
 
+      console.log(`[${requestId}] ✅ Pedido creado exitosamente con ID: ${result.data?.id}`);
       res.status(201).json(response);
 
     } catch (error) {
-      console.error('Error recibiendo pedido desde WooCommerce webhook:', error);
+      console.error(`[${requestId}] ❌ ERROR GENERAL:`, error);
+      console.error(`[${requestId}] Stack trace:`, error instanceof Error ? error.stack : 'N/A');
       const response: ApiResponse = {
         success: false,
         message: 'Error procesando pedido desde WooCommerce',
