@@ -430,7 +430,12 @@ export class OrderRepository {
       const limit = filters.limit || 10;
       const offset = (page - 1) * limit;
 
+      // Asegurar que limit y offset sean números enteros
+      const limitNum = Number(limit);
+      const offsetNum = Number(offset);
+
       // Obtener pedidos
+      // Nota: LIMIT y OFFSET deben ser valores directos (no placeholders) en algunas versiones de MySQL
       const [rows] = await connection.execute(
         `SELECT 
           o.*,
@@ -445,8 +450,8 @@ export class OrderRepository {
         LEFT JOIN remitos r ON o.id = r.order_id AND r.is_active = TRUE
         ${whereClause}
         ORDER BY o.order_date DESC
-        LIMIT ? OFFSET ?`,
-        [...params, limit, offset]
+        LIMIT ${limitNum} OFFSET ${offsetNum}`,
+        params
       );
 
       const orders = rows as OrderWithDetails[];
