@@ -56,16 +56,18 @@ app.use(cors({
 }));
 app.use(morgan('combined')); // Logging
 
-// Middleware para parsear JSON de manera más flexible
-app.use(express.json({ 
-  limit: '10mb',
-  strict: false, // Permitir JSON no estricto
-  type: ['application/json', 'application/*+json', 'text/json', '*/*'] // Aceptar diferentes tipos
-}));
+// Middleware para parsear form-urlencoded PRIMERO (para webhooks de prueba de WooCommerce)
 app.use(express.urlencoded({ 
   extended: true, 
   limit: '10mb',
   type: 'application/x-www-form-urlencoded'
+}));
+
+// Middleware para parsear JSON - solo procesa cuando Content-Type es JSON
+app.use(express.json({ 
+  limit: '10mb',
+  strict: false,
+  type: ['application/json', 'application/*+json', 'text/json'] // Solo procesa JSON explícito
 }));
 app.use(cookieParser());
 
@@ -106,6 +108,36 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT
   });
+});
+
+// Manejar errores de parsing del body (debe ir ANTES de las rutas)
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Si es un error de parsing del body
+  if (err instanceof SyntaxError && (err as any).status === 400 && 'body' in err) {
+    console.error('❌ Error de parsing del body:', err.message);
+    console.error('Content-Type recibido:', req.headers['content-type']);
+    console.error('Body raw:', (err as any).body);
+    
+    // Si el Content-Type es form-urlencoded o el body parece ser form-urlencoded
+    if (req.headers['content-type']?.includes('application/x-www-form-urlencoded') || 
+        (typeof (err as any).body === 'string' && (err as any).body.includes('='))) {
+      console.log('ℹ️ Detectado form-urlencoded, pero el parser no lo procesó. Continuando...');
+      // El body puede estar vacío, pero el controlador puede manejar esto
+      req.body = {}; // Resetear body para que el controlador pueda manejarlo
+      next();
+      return;
+    }
+    
+    res.status(400).json({
+      success: false,
+      message: 'Error de formato en el body',
+      error: 'El body no es un JSON válido. Verifica el formato de los datos enviados.',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+  
+  next(err);
 });
 
 // Import API routes

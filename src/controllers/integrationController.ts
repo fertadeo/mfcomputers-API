@@ -747,6 +747,7 @@ export class IntegrationController {
       console.log(`[${requestId}] Content-Type: ${req.headers['content-type']}`);
       console.log(`[${requestId}] Body type: ${typeof req.body}`);
       console.log(`[${requestId}] Body keys: ${req.body ? Object.keys(req.body).join(', ') : 'body is null/undefined'}`);
+      console.log(`[${requestId}] Body completo:`, JSON.stringify(req.body, null, 2));
       
       // WooCommerce envía el pedido directamente en el body
       const wooCommerceOrder = req.body;
@@ -761,6 +762,22 @@ export class IntegrationController {
           timestamp: new Date().toISOString()
         };
         res.status(400).json(response);
+        return;
+      }
+
+      // Manejar webhooks de prueba de WooCommerce (solo contienen webhook_id)
+      if (wooCommerceOrder.webhook_id && !wooCommerceOrder.id) {
+        console.log(`[${requestId}] ℹ️ Webhook de prueba recibido (webhook_id: ${wooCommerceOrder.webhook_id})`);
+        const response: ApiResponse = {
+          success: true,
+          message: 'Webhook de prueba recibido correctamente',
+          data: {
+            webhook_id: wooCommerceOrder.webhook_id,
+            is_test: true
+          },
+          timestamp: new Date().toISOString()
+        };
+        res.status(200).json(response);
         return;
       }
 
