@@ -45,6 +45,12 @@ router.post('/webhook/woocommerce/category',
   categoryController.wooCommerceCategoryWebhook.bind(categoryController)
 );
 
+// POST /api/integration/webhook/woocommerce/order - Recibir pedido directamente desde WooCommerce webhook
+router.post('/webhook/woocommerce/order',
+  authenticateWebhook,
+  integrationController.receiveWooCommerceOrder.bind(integrationController)
+);
+
 // POST /api/integration/orders/woocommerce-mayorista - Recibir pedido mayorista desde WooCommerce/N8N
 router.post('/orders/woocommerce-mayorista',
   authenticateWebhook,

@@ -736,5 +736,225 @@ export class IntegrationController {
       return null;
     }
   }
+
+  // POST /api/integration/webhook/woocommerce/order - Recibir pedido directamente desde WooCommerce webhook
+  public async receiveWooCommerceOrder(req: Request, res: Response): Promise<void> {
+    try {
+      console.log('=== RECIBIENDO PEDIDO DESDE WOOCOMMERCE WEBHOOK ===');
+      console.log('Body completo:', JSON.stringify(req.body, null, 2));
+      console.log('Content-Type:', req.headers['content-type']);
+
+      // WooCommerce envía el pedido directamente en el body
+      const wooCommerceOrder = req.body;
+
+      // Validar que sea un pedido válido de WooCommerce
+      if (!wooCommerceOrder || !wooCommerceOrder.id) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Formato de pedido inválido',
+          error: 'El body debe contener un pedido válido de WooCommerce con campo "id"',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      // Transformar el formato de WooCommerce al formato interno del sistema
+      const transformedOrder = {
+        order_date: wooCommerceOrder.date_created || wooCommerceOrder.date_created_gmt || new Date().toISOString(),
+        order_number: wooCommerceOrder.number || wooCommerceOrder.id.toString(),
+        woocommerce_order_id: wooCommerceOrder.id,
+        customer: {
+          email: wooCommerceOrder.billing?.email || wooCommerceOrder.customer_id?.toString(),
+          first_name: wooCommerceOrder.billing?.first_name || '',
+          last_name: wooCommerceOrder.billing?.last_name || '',
+          phone: wooCommerceOrder.billing?.phone || '',
+          display_name: `${wooCommerceOrder.billing?.first_name || ''} ${wooCommerceOrder.billing?.last_name || ''}`.trim() || wooCommerceOrder.billing?.email || ''
+        },
+        line_items: (wooCommerceOrder.line_items || []).map((item: any) => ({
+          sku: item.sku || null,
+          quantity: item.quantity || 1,
+          price: parseFloat(item.price || item.total || 0) / (item.quantity || 1), // Precio unitario
+          product_name: item.name || ''
+        })),
+        shipping: {
+          address_1: wooCommerceOrder.shipping?.address_1 || wooCommerceOrder.billing?.address_1 || '',
+          city: wooCommerceOrder.shipping?.city || wooCommerceOrder.billing?.city || '',
+          country: wooCommerceOrder.shipping?.country || wooCommerceOrder.billing?.country || 'AR',
+          phone: wooCommerceOrder.shipping?.phone || wooCommerceOrder.billing?.phone || '',
+          method: wooCommerceOrder.shipping_lines?.[0]?.method_title || '',
+          total: wooCommerceOrder.shipping_total || '0'
+        },
+        billing: {
+          address_1: wooCommerceOrder.billing?.address_1 || '',
+          city: wooCommerceOrder.billing?.city || '',
+          country: wooCommerceOrder.billing?.country || 'AR',
+          phone: wooCommerceOrder.billing?.phone || ''
+        },
+        total: wooCommerceOrder.total || '0',
+        meta_data: wooCommerceOrder.meta_data || []
+      };
+
+      console.log('Pedido transformado:', JSON.stringify(transformedOrder, null, 2));
+
+      // Validar datos requeridos
+      if (!transformedOrder.customer.email) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Email del cliente requerido',
+          error: 'El pedido de WooCommerce debe incluir un email en billing.email',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      if (!transformedOrder.line_items || transformedOrder.line_items.length === 0) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'El pedido debe incluir al menos un producto',
+          error: 'El pedido de WooCommerce debe incluir line_items con al menos un producto',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      // Verificar si el pedido ya existe (evitar duplicados)
+      if (transformedOrder.woocommerce_order_id) {
+        const existingOrder = await this.orderService.getOrderByWooCommerceId(transformedOrder.woocommerce_order_id);
+        if (existingOrder && existingOrder.success && existingOrder.data) {
+          const response: ApiResponse = {
+            success: true,
+            message: 'Pedido ya existe en el sistema',
+            data: {
+              order: existingOrder.data,
+              already_exists: true
+            },
+            timestamp: new Date().toISOString()
+          };
+          res.status(200).json(response);
+          return;
+        }
+      }
+
+      // 1. Buscar o crear cliente
+      const client = await this.findOrCreateClient({
+        email: transformedOrder.customer.email,
+        name: transformedOrder.customer.display_name || transformedOrder.customer.email,
+        phone: transformedOrder.customer.phone || transformedOrder.billing.phone,
+        address: transformedOrder.shipping.address_1 || transformedOrder.billing.address_1,
+        city: transformedOrder.shipping.city || transformedOrder.billing.city,
+        country: transformedOrder.shipping.country || transformedOrder.billing.country || 'Argentina'
+      });
+
+      // 2. Mapear productos y validar existencia
+      const orderItems: CreateOrderItemData[] = [];
+      const missingProducts: string[] = [];
+
+      for (const item of transformedOrder.line_items) {
+        const sku = item.sku;
+        if (!sku) {
+          console.warn('Item sin SKU:', item);
+          continue;
+        }
+
+        // Buscar producto por SKU
+        const product = await this.productService.getProductByCode(sku);
+        if (!product) {
+          missingProducts.push(sku);
+          console.warn(`Producto no encontrado: ${sku}`);
+          continue;
+        }
+
+        orderItems.push({
+          product_id: product.id,
+          quantity: item.quantity || 1,
+          unit_price: parseFloat(String(item.price || product.price))
+        });
+      }
+
+      // Validar que se encontraron productos
+      if (orderItems.length === 0) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'No se encontraron productos válidos para el pedido',
+          error: missingProducts.length > 0 
+            ? `Productos no encontrados: ${missingProducts.join(', ')}`
+            : 'Todos los productos tienen SKU inválido',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      // 3. Preparar datos del pedido
+      const toNull = (value: any): any => {
+        if (value === undefined || value === null) return null;
+        if (typeof value === 'string' && value.trim() === '') return null;
+        return value;
+      };
+
+      const orderData: CreateOrderData = {
+        client_id: client.id,
+        order_number: transformedOrder.order_number ? `WC-${transformedOrder.order_number}` : undefined,
+        woocommerce_order_id: transformedOrder.woocommerce_order_id ? parseInt(String(transformedOrder.woocommerce_order_id), 10) : undefined,
+        status: 'pendiente_preparacion',
+        delivery_date: transformedOrder.shipping.delivery_date || transformedOrder.order_date || undefined,
+        delivery_address: toNull(transformedOrder.shipping.address_1 || transformedOrder.billing.address_1),
+        delivery_city: toNull(transformedOrder.shipping.city || transformedOrder.billing.city),
+        delivery_contact: toNull(transformedOrder.customer.display_name || transformedOrder.customer.email),
+        delivery_phone: toNull(transformedOrder.shipping.phone || transformedOrder.customer.phone || transformedOrder.billing.phone),
+        transport_company: toNull(transformedOrder.shipping.method),
+        transport_cost: transformedOrder.shipping.total && transformedOrder.shipping.total !== '' && transformedOrder.shipping.total !== '0.00' 
+          ? parseFloat(String(transformedOrder.shipping.total)) 
+          : 0,
+        notes: `Pedido desde WooCommerce${transformedOrder.order_number ? ` - Order #${transformedOrder.order_number}` : ''}${transformedOrder.woocommerce_order_id ? ` (WC ID: ${transformedOrder.woocommerce_order_id})` : ''}${wooCommerceOrder.status ? ` - Estado WC: ${wooCommerceOrder.status}` : ''}`,
+        items: orderItems
+      };
+
+      // 4. Obtener o crear usuario del sistema para pedidos automáticos
+      const userId = await this.getOrCreateSystemUser();
+
+      // 5. Crear pedido
+      const result = await this.orderService.createOrder(orderData, userId);
+
+      if (!result.success) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Error al crear pedido',
+          error: result.error || 'Error desconocido',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      // 6. Retornar pedido creado
+      const response: ApiResponse = {
+        success: true,
+        message: 'Pedido recibido desde WooCommerce y creado exitosamente',
+        data: {
+          order: result.data,
+          warnings: missingProducts.length > 0 
+            ? [`Productos no encontrados: ${missingProducts.join(', ')}`]
+            : []
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(201).json(response);
+
+    } catch (error) {
+      console.error('Error recibiendo pedido desde WooCommerce webhook:', error);
+      const response: ApiResponse = {
+        success: false,
+        message: 'Error procesando pedido desde WooCommerce',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(500).json(response);
+    }
+  }
 }
 

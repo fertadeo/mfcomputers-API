@@ -95,6 +95,7 @@ router.get('/', (req, res) => {
       stock_sync: '/api/integration/products/sync',
       stock_summary: '/api/integration/stock/summary',
       webhook: '/api/integration/webhook/woocommerce',
+      webhook_order: 'POST /api/integration/webhook/woocommerce/order',
       wholesale_order: 'POST /api/integration/orders/woocommerce-mayorista'
     },
     woocommerce: {
