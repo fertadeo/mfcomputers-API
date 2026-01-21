@@ -899,10 +899,10 @@ export class IntegrationController {
       const orderItems: CreateOrderItemData[] = [];
       const missingProducts: string[] = [];
 
-      for (const item of transformedOrder.line_items) {
-        const sku = item.sku;
+      for (const wcItem of wooCommerceOrder.line_items || []) {
+        const sku = wcItem.sku;
         if (!sku) {
-          console.warn('Item sin SKU:', item);
+          console.warn('Item sin SKU:', wcItem);
           continue;
         }
 
@@ -914,10 +914,27 @@ export class IntegrationController {
           continue;
         }
 
+        // Calcular precios
+        const quantity = wcItem.quantity || 1;
+        const total = parseFloat(String(wcItem.total || 0));
+        const unitPrice = quantity > 0 ? total / quantity : 0;
+        const subtotal = parseFloat(String(wcItem.subtotal || total));
+        const subtotalTax = parseFloat(String(wcItem.subtotal_tax || 0));
+        const totalTax = parseFloat(String(wcItem.total_tax || 0));
+
         orderItems.push({
           product_id: product.id,
-          quantity: item.quantity || 1,
-          unit_price: parseFloat(String(item.price || product.price))
+          quantity: quantity,
+          unit_price: unitPrice,
+          // Campos adicionales de WooCommerce
+          woocommerce_item_id: wcItem.id,
+          woocommerce_product_id: wcItem.product_id,
+          woocommerce_variation_id: wcItem.variation_id || null,
+          product_name_wc: wcItem.name,
+          tax_class: wcItem.tax_class || null,
+          subtotal: subtotal,
+          subtotal_tax: subtotalTax,
+          total_tax: totalTax
         });
       }
 
@@ -948,6 +965,9 @@ export class IntegrationController {
         client_id: client.id,
         order_number: transformedOrder.order_number ? `WC-${transformedOrder.order_number}` : undefined,
         woocommerce_order_id: transformedOrder.woocommerce_order_id ? parseInt(String(transformedOrder.woocommerce_order_id), 10) : undefined,
+        // Marcar como pedido de WooCommerce y guardar JSON completo recibido del webhook
+        canal_venta: 'woocommerce',
+        json: wooCommerceOrder, // JSON completo recibido del webhook de WooCommerce (incluye todos los datos: line_items, billing, shipping, meta_data, etc.)
         status: 'pendiente_preparacion',
         delivery_date: transformedOrder.order_date || undefined,
         delivery_address: toNull(transformedOrder.shipping.address_1 || transformedOrder.billing.address_1),
@@ -959,7 +979,28 @@ export class IntegrationController {
           ? parseFloat(String(transformedOrder.shipping.total)) 
           : 0,
         notes: `Pedido desde WooCommerce${transformedOrder.order_number ? ` - Order #${transformedOrder.order_number}` : ''}${transformedOrder.woocommerce_order_id ? ` (WC ID: ${transformedOrder.woocommerce_order_id})` : ''}${wooCommerceOrder.status ? ` - Estado WC: ${wooCommerceOrder.status}` : ''}`,
-        items: orderItems
+        items: orderItems,
+        // Campos adicionales de WooCommerce
+        payment_method: toNull(wooCommerceOrder.payment_method),
+        payment_method_title: toNull(wooCommerceOrder.payment_method_title),
+        transaction_id: toNull(wooCommerceOrder.transaction_id),
+        customer_ip_address: toNull(wooCommerceOrder.customer_ip_address),
+        currency: toNull(wooCommerceOrder.currency || 'ARS'),
+        discount_total: wooCommerceOrder.discount_total ? parseFloat(String(wooCommerceOrder.discount_total)) : 0,
+        tax_total: wooCommerceOrder.total_tax ? parseFloat(String(wooCommerceOrder.total_tax)) : 0,
+        date_paid: wooCommerceOrder.date_paid || wooCommerceOrder.date_paid_gmt || undefined,
+        date_completed: wooCommerceOrder.date_completed || wooCommerceOrder.date_completed_gmt || undefined,
+        billing_address_2: toNull(wooCommerceOrder.billing?.address_2),
+        billing_state: toNull(wooCommerceOrder.billing?.state),
+        billing_postcode: toNull(wooCommerceOrder.billing?.postcode),
+        billing_company: toNull(wooCommerceOrder.billing?.company),
+        shipping_address_2: toNull(wooCommerceOrder.shipping?.address_2),
+        shipping_state: toNull(wooCommerceOrder.shipping?.state),
+        shipping_postcode: toNull(wooCommerceOrder.shipping?.postcode),
+        shipping_company: toNull(wooCommerceOrder.shipping?.company),
+        total_amount: wooCommerceOrder.total ? parseFloat(String(wooCommerceOrder.total)) : undefined,
+        // Guardar TODOS los datos completos de WooCommerce en formato JSON
+        woocommerce_raw_data: wooCommerceOrder
       };
 
       // 4. Obtener o crear usuario del sistema para pedidos automáticos

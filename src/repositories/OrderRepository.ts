@@ -65,6 +65,18 @@ export class OrderRepository {
     return value;
   }
 
+  // Helper para parsear JSON field si viene como string
+  private parseOrderJson(order: any): void {
+    if (order.json && typeof order.json === 'string') {
+      try {
+        order.json = JSON.parse(order.json);
+      } catch (error) {
+        console.warn(`Error parsing JSON field for order ${order.id || order.order_number}:`, error);
+        order.json = null;
+      }
+    }
+  }
+
   async createOrder(data: CreateOrderData, userId: number | null): Promise<Order> {
     const connection = await this.db.getConnection();
     
@@ -83,6 +95,8 @@ export class OrderRepository {
       const insertValues = [
         orderNumber,
         this.toNull(data.woocommerce_order_id),
+        this.toNull(data.canal_venta), // 'woocommerce', 'local', etc.
+        data.json ? JSON.stringify(data.json) : null, // JSON completo como string
         Number(data.client_id), // Asegurar que sea número
         data.status || 'pendiente_preparacion',
         this.toNull(deliveryDate), // Asegurar que no sea undefined
@@ -103,13 +117,40 @@ export class OrderRepository {
         throw new Error('Algunos valores son undefined. Revisar logs.');
       }
 
+      // Preparar campos adicionales de WooCommerce
+      const wooCommerceFields = [
+        this.toNull(data.payment_method),
+        this.toNull(data.payment_method_title),
+        this.toNull(data.transaction_id),
+        this.toNull(data.customer_ip_address),
+        this.toNull(data.currency || 'ARS'),
+        this.toNull(data.discount_total) !== null ? Number(data.discount_total || 0) : 0,
+        this.toNull(data.tax_total) !== null ? Number(data.tax_total || 0) : 0,
+        this.convertToMySQLDate(data.date_paid),
+        this.convertToMySQLDate(data.date_completed),
+        this.toNull(data.billing_address_2),
+        this.toNull(data.billing_state),
+        this.toNull(data.billing_postcode),
+        this.toNull(data.billing_company),
+        this.toNull(data.shipping_address_2),
+        this.toNull(data.shipping_state),
+        this.toNull(data.shipping_postcode),
+        this.toNull(data.shipping_company)
+      ];
+
+      const allInsertValues = [...insertValues, ...wooCommerceFields];
+
       const [result] = await connection.execute(
         `INSERT INTO orders (
-          order_number, woocommerce_order_id, client_id, status, delivery_date,
+          order_number, woocommerce_order_id, canal_venta, json, client_id, status, delivery_date,
           delivery_address, delivery_city, delivery_contact, delivery_phone,
-          transport_company, transport_cost, notes, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        insertValues
+          transport_company, transport_cost, notes, created_by,
+          payment_method, payment_method_title, transaction_id, customer_ip_address,
+          currency, discount_total, tax_total, date_paid, date_completed,
+          billing_address_2, billing_state, billing_postcode, billing_company,
+          shipping_address_2, shipping_state, shipping_postcode, shipping_company
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        allInsertValues
       );
 
       const orderId = (result as any).insertId;
@@ -134,30 +175,54 @@ export class OrderRepository {
         const totalPrice = quantity * unitPrice;
         totalAmount += totalPrice;
 
+        // Preparar campos adicionales de WooCommerce para items
+        const itemSubtotal = item.subtotal !== undefined ? Number(item.subtotal) : totalPrice;
+        const itemSubtotalTax = item.subtotal_tax !== undefined ? Number(item.subtotal_tax) : 0;
+        const itemTotalTax = item.total_tax !== undefined ? Number(item.total_tax) : 0;
+
         await connection.execute(
           `INSERT INTO order_items (
-            order_id, product_id, quantity, unit_price, total_price, batch_number, notes
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            order_id, product_id, quantity, unit_price, total_price, batch_number, notes,
+            woocommerce_item_id, woocommerce_product_id, woocommerce_variation_id,
+            product_name_wc, tax_class, subtotal, subtotal_tax, total_tax
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            Number(orderId), // Asegurar que sea número
-            Number(item.product_id), // Asegurar que sea número
-            Number(quantity), // Asegurar que sea número
-            Number(unitPrice), // Asegurar que sea número
-            Number(totalPrice), // Asegurar que sea número
+            Number(orderId),
+            Number(item.product_id),
+            Number(quantity),
+            Number(unitPrice),
+            Number(totalPrice),
             this.toNull(item.batch_number),
-            this.toNull(item.notes)
+            this.toNull(item.notes),
+            this.toNull(item.woocommerce_item_id),
+            this.toNull(item.woocommerce_product_id),
+            this.toNull(item.woocommerce_variation_id),
+            this.toNull(item.product_name_wc),
+            this.toNull(item.tax_class),
+            Number(itemSubtotal),
+            Number(itemSubtotalTax),
+            Number(itemTotalTax)
           ]
         );
       }
 
       // Agregar costo de transporte al total
       totalAmount += (data.transport_cost || 0);
+      // Agregar descuentos y ajustar con el total de WooCommerce si está disponible
+      if (data.total_amount) {
+        totalAmount = Number(data.total_amount);
+      }
 
-      // Actualizar total_amount del pedido
+      // Actualizar total_amount del pedido (usar el de WooCommerce si está disponible)
       await connection.execute(
         `UPDATE orders SET total_amount = ? WHERE id = ?`,
         [totalAmount, orderId]
       );
+
+      // Guardar detalles completos de WooCommerce si están disponibles
+      if (data.woocommerce_order_id && data.woocommerce_raw_data) {
+        await this.saveWooCommerceOrderDetails(connection, orderId, data.woocommerce_order_id, data.woocommerce_raw_data);
+      }
 
       await connection.commit();
 
@@ -201,6 +266,11 @@ export class OrderRepository {
       // Obtener items del pedido
       order.items = await this.getOrderItems(order.id);
 
+      // Obtener detalles completos de WooCommerce si existe
+      if (order.woocommerce_order_id) {
+        order.woocommerce_details = await this.getWooCommerceOrderDetails(order.id);
+      }
+
       return order;
 
     } catch (error) {
@@ -235,8 +305,16 @@ export class OrderRepository {
 
       const order = orders[0];
       
+      // Parsear JSON field si existe
+      this.parseOrderJson(order);
+      
       // Obtener items del pedido
       order.items = await this.getOrderItems(order.id);
+
+      // Obtener detalles completos de WooCommerce si existe
+      if (order.woocommerce_order_id) {
+        order.woocommerce_details = await this.getWooCommerceOrderDetails(order.id);
+      }
 
       return order;
 
@@ -272,8 +350,16 @@ export class OrderRepository {
 
       const order = orders[0];
       
+      // Parsear JSON field si existe
+      this.parseOrderJson(order);
+      
       // Obtener items del pedido
       order.items = await this.getOrderItems(order.id);
+
+      // Obtener detalles completos de WooCommerce si existe
+      if (order.woocommerce_order_id) {
+        order.woocommerce_details = await this.getWooCommerceOrderDetails(order.id);
+      }
 
       return order;
 
@@ -365,8 +451,9 @@ export class OrderRepository {
 
       const orders = rows as OrderWithDetails[];
 
-      // Obtener items para cada pedido
+      // Parsear JSON y obtener items para cada pedido
       for (const order of orders) {
+        this.parseOrderJson(order);
         order.items = await this.getOrderItems(order.id);
       }
 
@@ -659,6 +746,73 @@ export class OrderRepository {
 
     } catch (error) {
       throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  /**
+   * Guardar detalles completos de WooCommerce en tabla separada
+   */
+  async saveWooCommerceOrderDetails(
+    connection: any,
+    orderId: number,
+    woocommerceOrderId: number,
+    rawData: any
+  ): Promise<void> {
+    try {
+      const [existing] = await connection.execute(
+        `SELECT id FROM woocommerce_order_details WHERE order_id = ? OR woocommerce_order_id = ?`,
+        [orderId, woocommerceOrderId]
+      );
+
+      const jsonData = JSON.stringify(rawData);
+
+      if (existing && (existing as any[]).length > 0) {
+        // Actualizar si ya existe
+        await connection.execute(
+          `UPDATE woocommerce_order_details 
+           SET raw_data = ?, updated_at = CURRENT_TIMESTAMP 
+           WHERE order_id = ? OR woocommerce_order_id = ?`,
+          [jsonData, orderId, woocommerceOrderId]
+        );
+      } else {
+        // Insertar nuevo
+        await connection.execute(
+          `INSERT INTO woocommerce_order_details (order_id, woocommerce_order_id, raw_data)
+           VALUES (?, ?, ?)`,
+          [orderId, woocommerceOrderId, jsonData]
+        );
+      }
+    } catch (error) {
+      console.error('Error guardando detalles de WooCommerce:', error);
+      // No lanzar error, solo loggear para no interrumpir la creación del pedido
+    }
+  }
+
+  /**
+   * Obtener detalles completos de WooCommerce de un pedido
+   */
+  async getWooCommerceOrderDetails(orderId: number): Promise<any | null> {
+    const connection = await this.db.getConnection();
+    try {
+      const [rows] = await connection.execute(
+        `SELECT * FROM woocommerce_order_details WHERE order_id = ? LIMIT 1`,
+        [orderId]
+      );
+
+      const details = (rows as any[])[0];
+      if (details && details.raw_data) {
+        // Parsear JSON si está almacenado como string
+        if (typeof details.raw_data === 'string') {
+          details.raw_data = JSON.parse(details.raw_data);
+        }
+        return details;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error obteniendo detalles de WooCommerce:', error);
+      return null;
     } finally {
       connection.release();
     }

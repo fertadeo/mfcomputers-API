@@ -20,6 +20,41 @@ export class OrderController {
       const data: CreateOrderData = req.body;
       const userId = (req as any).user?.id || 1; // TODO: Obtener del JWT
 
+      // Si no se especifica canal_venta, es un pedido local
+      if (!data.canal_venta) {
+        data.canal_venta = 'local';
+      }
+
+      // Si no se especifica json, guardar todos los datos del pedido como JSON
+      // Esto permite tener un registro completo de cómo se creó el pedido localmente
+      if (!data.json) {
+        data.json = {
+          // Datos principales del pedido
+          client_id: data.client_id,
+          order_number: data.order_number,
+          status: data.status || 'pendiente_preparacion',
+          delivery_date: data.delivery_date,
+          delivery_address: data.delivery_address,
+          delivery_city: data.delivery_city,
+          delivery_contact: data.delivery_contact,
+          delivery_phone: data.delivery_phone,
+          transport_company: data.transport_company,
+          transport_cost: data.transport_cost,
+          notes: data.notes,
+          // Items del pedido
+          items: data.items,
+          // Metadatos de creación
+          created_by: userId,
+          created_at: new Date().toISOString(),
+          // Información del usuario que creó el pedido (si está disponible)
+          user_info: (req as any).user ? {
+            id: (req as any).user.id,
+            email: (req as any).user.email,
+            name: (req as any).user.name
+          } : null
+        };
+      }
+
       const result = await this.orderService.createOrder(data, userId);
       
       res.status(result.success ? 201 : 400).json(result);

@@ -76,41 +76,35 @@ router.post('/',
   orderController.createOrder.bind(orderController)
 );
 
-// GET /api/orders - Obtener todos los pedidos con filtros
+// GET /api/orders - Obtener todos los pedidos con filtros (sin autenticación)
 router.get('/',
-  authenticateApiKey,
   validate(orderFiltersValidation),
   orderController.getAllOrders.bind(orderController)
 );
 
-// GET /api/orders/stats - Obtener estadísticas del módulo
+// GET /api/orders/stats - Obtener estadísticas del módulo (sin autenticación)
 router.get('/stats',
-  authenticateApiKey,
   orderController.getOrderStats.bind(orderController)
 );
 
-// GET /api/orders/config - Obtener configuración del módulo
+// GET /api/orders/config - Obtener configuración del módulo (sin autenticación)
 router.get('/config',
-  authenticateApiKey,
   orderController.getOrdersConfig.bind(orderController)
 );
 
-// GET /api/orders/ready-for-remito - Obtener pedidos listos para remito
+// GET /api/orders/ready-for-remito - Obtener pedidos listos para remito (sin autenticación)
 router.get('/ready-for-remito',
-  authenticateApiKey,
   orderController.getOrdersReadyForRemito.bind(orderController)
 );
 
-// GET /api/orders/:id - Obtener pedido por ID
+// GET /api/orders/:id - Obtener pedido por ID (sin autenticación)
 router.get('/:id',
-  authenticateApiKey,
   validate(idParamValidation),
   orderController.getOrderById.bind(orderController)
 );
 
-// GET /api/orders/number/:number - Obtener pedido por número
+// GET /api/orders/number/:number - Obtener pedido por número (sin autenticación)
 router.get('/number/:number',
-  authenticateApiKey,
   orderController.getOrderByNumber.bind(orderController)
 );
 
