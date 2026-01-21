@@ -73,6 +73,29 @@ app.use(cookieParser());
 
 // Debug middleware for CORS and requests
 app.use((req, res, next) => {
+  // Log ALL incoming requests to webhook endpoints (antes del middleware de auth)
+  if (req.url.includes('/webhook/woocommerce')) {
+    console.log('\n🔔 ====== WEBHOOK REQUEST INCOMING ======');
+    console.log(`📍 URL: ${req.method} ${req.url}`);
+    console.log(`📍 IP: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
+    console.log(`📍 User-Agent: ${req.get('user-agent') || 'unknown'}`);
+    console.log(`📍 Content-Type: ${req.get('content-type') || 'not set'}`);
+    console.log(`📍 Headers relacionados:`);
+    console.log(`   - X-Webhook-Secret: ${req.get('x-webhook-secret') ? '***presente***' : 'no presente'}`);
+    console.log(`   - X-API-Key: ${req.get('x-api-key') ? '***presente***' : 'no presente'}`);
+    console.log(`📍 Body preview:`, req.body ? JSON.stringify(req.body).substring(0, 300) : 'no body');
+    if (req.body && typeof req.body === 'object') {
+      console.log(`📍 Body keys: ${Object.keys(req.body).join(', ')}`);
+      // Detectar si es pedido real o prueba
+      if (req.body.id && !req.body.webhook_id) {
+        console.log(`✅ PEDIDO REAL DETECTADO - ID: ${req.body.id}`);
+      } else if (req.body.webhook_id) {
+        console.log(`🧪 WEBHOOK DE PRUEBA - webhook_id: ${req.body.webhook_id}`);
+      }
+    }
+    console.log('🔔 ====== FIN WEBHOOK REQUEST ======\n');
+  }
+  
   // Log CORS-related headers
   if (req.method === 'OPTIONS') {
     console.log('=== CORS PREFLIGHT REQUEST ===');
