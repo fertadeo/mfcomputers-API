@@ -730,62 +730,23 @@ export class OrderRepository {
     woocommerceOrderId: number,
     rawData: any
   ): Promise<void> {
-    try {
-      const [existing] = await connection.execute(
-        `SELECT id FROM woocommerce_order_details WHERE order_id = ? OR woocommerce_order_id = ?`,
-        [orderId, woocommerceOrderId]
-      );
-
-      const jsonData = JSON.stringify(rawData);
-
-      if (existing && (existing as any[]).length > 0) {
-        // Actualizar si ya existe
-        await connection.execute(
-          `UPDATE woocommerce_order_details 
-           SET raw_data = ?, updated_at = CURRENT_TIMESTAMP 
-           WHERE order_id = ? OR woocommerce_order_id = ?`,
-          [jsonData, orderId, woocommerceOrderId]
-        );
-      } else {
-        // Insertar nuevo
-        await connection.execute(
-          `INSERT INTO woocommerce_order_details (order_id, woocommerce_order_id, raw_data)
-           VALUES (?, ?, ?)`,
-          [orderId, woocommerceOrderId, jsonData]
-        );
-      }
-    } catch (error) {
-      console.error('Error guardando detalles de WooCommerce:', error);
-      // No lanzar error, solo loggear para no interrumpir la creación del pedido
-    }
+    // Nota: Ya no usamos la tabla woocommerce_order_details separada
+    // Todos los datos de WooCommerce se guardan en el campo 'json' de la tabla orders
+    // Este método se mantiene por compatibilidad pero ya no hace nada
+    // ya que los datos están en order.json
+    return;
   }
 
   /**
    * Obtener detalles completos de WooCommerce de un pedido
+   * Nota: Ya no usa tabla separada woocommerce_order_details
+   * Los datos de WooCommerce ahora están en el campo 'json' del pedido
    */
   async getWooCommerceOrderDetails(orderId: number): Promise<any | null> {
-    const connection = await this.db.getConnection();
-    try {
-      const [rows] = await connection.execute(
-        `SELECT * FROM woocommerce_order_details WHERE order_id = ? LIMIT 1`,
-        [orderId]
-      );
-
-      const details = (rows as any[])[0];
-      if (details && details.raw_data) {
-        // Parsear JSON si está almacenado como string
-        if (typeof details.raw_data === 'string') {
-          details.raw_data = JSON.parse(details.raw_data);
-        }
-        return details;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error obteniendo detalles de WooCommerce:', error);
-      return null;
-    } finally {
-      connection.release();
-    }
+    // Los detalles de WooCommerce ahora se obtienen del campo 'json' del pedido
+    // Este método se mantiene por compatibilidad pero retorna null
+    // Los datos están disponibles en order.json directamente
+    return null;
   }
 
   async getOrdersConfig(): Promise<Record<string, any>> {
