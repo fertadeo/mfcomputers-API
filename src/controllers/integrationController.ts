@@ -900,7 +900,7 @@ export class IntegrationController {
         order_number: transformedOrder.order_number ? `WC-${transformedOrder.order_number}` : undefined,
         woocommerce_order_id: transformedOrder.woocommerce_order_id ? parseInt(String(transformedOrder.woocommerce_order_id), 10) : undefined,
         status: 'pendiente_preparacion',
-        delivery_date: transformedOrder.shipping.delivery_date || transformedOrder.order_date || undefined,
+        delivery_date: transformedOrder.order_date || undefined,
         delivery_address: toNull(transformedOrder.shipping.address_1 || transformedOrder.billing.address_1),
         delivery_city: toNull(transformedOrder.shipping.city || transformedOrder.billing.city),
         delivery_contact: toNull(transformedOrder.customer.display_name || transformedOrder.customer.email),
