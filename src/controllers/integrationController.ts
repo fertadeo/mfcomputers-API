@@ -797,6 +797,11 @@ export class IntegrationController {
 
       console.log(`[${requestId}] Pedido ID: ${wooCommerceOrder.id}, Número: ${wooCommerceOrder.number || 'N/A'}`);
 
+      // ⭐ NUEVO: Detectar el tipo de acción (create, update, delete)
+      // Puede venir en el header o en el body
+      const action = (req.headers['x-order-action'] as string) || wooCommerceOrder.action || 'create';
+      console.log(`[${requestId}] Acción detectada: ${action}`);
+
       // Transformar el formato de WooCommerce al formato interno del sistema
       const transformedOrder = {
         order_date: wooCommerceOrder.date_created || wooCommerceOrder.date_created_gmt || new Date().toISOString(),
@@ -867,21 +872,78 @@ export class IntegrationController {
         return;
       }
 
-      // Verificar si el pedido ya existe (evitar duplicados)
+      // ⭐ NUEVO: Manejar diferentes acciones (create, update, delete)
       if (transformedOrder.woocommerce_order_id) {
         const existingOrder = await this.orderService.getOrderByWooCommerceId(transformedOrder.woocommerce_order_id);
+        
         if (existingOrder && existingOrder.success && existingOrder.data) {
-          const response: ApiResponse = {
-            success: true,
-            message: 'Pedido ya existe en el sistema',
-            data: {
-              order: existingOrder.data,
-              already_exists: true
-            },
-            timestamp: new Date().toISOString()
-          };
-          res.status(200).json(response);
-          return;
+          const existingOrderData = existingOrder.data as any;
+          
+          // Si es una eliminación
+          if (action === 'delete') {
+            console.log(`[${requestId}] 🗑️ Procesando eliminación de pedido ID: ${existingOrderData.id}`);
+            const deleteResult = await this.orderService.deleteOrder(existingOrderData.id);
+            
+            if (deleteResult.success) {
+              const response: ApiResponse = {
+                success: true,
+                message: 'Pedido eliminado exitosamente',
+                data: {
+                  order_id: existingOrderData.id,
+                  woocommerce_order_id: transformedOrder.woocommerce_order_id,
+                  action: 'delete'
+                },
+                timestamp: new Date().toISOString()
+              };
+              res.status(200).json(response);
+              return;
+            } else {
+              const response: ApiResponse = {
+                success: false,
+                message: 'Error al eliminar pedido',
+                error: deleteResult.error || 'Error desconocido',
+                timestamp: new Date().toISOString()
+              };
+              res.status(500).json(response);
+              return;
+            }
+          }
+          
+          // Si es una actualización
+          if (action === 'update') {
+            console.log(`[${requestId}] 🔄 Procesando actualización de pedido ID: ${existingOrderData.id}`);
+            // Continuar con el flujo de actualización más abajo
+            // No retornar aquí, dejar que continúe para actualizar el pedido
+          }
+          
+          // Si es creación y ya existe, evitar duplicados
+          if (action === 'create') {
+            console.log(`[${requestId}] ⚠️ Pedido ya existe, omitiendo creación duplicada`);
+            const response: ApiResponse = {
+              success: true,
+              message: 'Pedido ya existe en el sistema',
+              data: {
+                order: existingOrderData,
+                already_exists: true
+              },
+              timestamp: new Date().toISOString()
+            };
+            res.status(200).json(response);
+            return;
+          }
+        } else {
+          // Si no existe pero es update o delete, no podemos procesarlo
+          if (action === 'update' || action === 'delete') {
+            console.error(`[${requestId}] ❌ ERROR: No se puede ${action} un pedido que no existe`);
+            const response: ApiResponse = {
+              success: false,
+              message: `No se puede ${action === 'update' ? 'actualizar' : 'eliminar'} un pedido que no existe`,
+              error: `Pedido con woocommerce_order_id ${transformedOrder.woocommerce_order_id} no encontrado en el sistema`,
+              timestamp: new Date().toISOString()
+            };
+            res.status(404).json(response);
+            return;
+          }
         }
       }
 
@@ -961,6 +1023,24 @@ export class IntegrationController {
         return value;
       };
 
+      // ⭐ NUEVO: Mapear estado de WooCommerce al estado del ERP
+      const mapWooCommerceStatus = (wcStatus: string): string => {
+        const statusMap: Record<string, string> = {
+          'pending': 'pendiente_preparacion',
+          'processing': 'en_proceso',
+          'on-hold': 'pendiente_preparacion',
+          'completed': 'completado',
+          'cancelled': 'cancelado',
+          'refunded': 'cancelado',
+          'failed': 'cancelado'
+        };
+        return statusMap[wcStatus] || 'pendiente_preparacion';
+      };
+
+      const orderStatus = wooCommerceOrder.status 
+        ? mapWooCommerceStatus(wooCommerceOrder.status)
+        : 'pendiente_preparacion';
+
       const orderData: CreateOrderData = {
         client_id: client.id,
         order_number: transformedOrder.order_number ? `WC-${transformedOrder.order_number}` : undefined,
@@ -968,7 +1048,7 @@ export class IntegrationController {
         // Marcar como pedido de WooCommerce y guardar JSON completo recibido del webhook
         canal_venta: 'woocommerce',
         json: wooCommerceOrder, // JSON completo recibido del webhook de WooCommerce (incluye todos los datos: line_items, billing, shipping, meta_data, etc.)
-        status: 'pendiente_preparacion',
+        status: orderStatus as 'pendiente_preparacion' | 'listo_despacho' | 'pagado' | 'aprobado' | undefined, // ⭐ NUEVO: Usar estado mapeado de WooCommerce
         delivery_date: transformedOrder.order_date || undefined,
         delivery_address: toNull(transformedOrder.shipping.address_1 || transformedOrder.billing.address_1),
         delivery_city: toNull(transformedOrder.shipping.city || transformedOrder.billing.city),
@@ -1006,13 +1086,51 @@ export class IntegrationController {
       // 4. Obtener o crear usuario del sistema para pedidos automáticos
       const userId = await this.getOrCreateSystemUser();
 
-      // 5. Crear pedido
-      const result = await this.orderService.createOrder(orderData, userId);
+      // 5. Crear o actualizar pedido según la acción
+      let result;
+      let actionMessage = '';
+      
+      if (action === 'update') {
+        // Buscar el pedido existente para actualizarlo
+        const existingOrder = await this.orderService.getOrderByWooCommerceId(transformedOrder.woocommerce_order_id!);
+        if (existingOrder && existingOrder.success && existingOrder.data) {
+          const existingOrderData = existingOrder.data as any;
+          console.log(`[${requestId}] 🔄 Actualizando pedido existente ID: ${existingOrderData.id}`);
+          
+          // Preparar datos de actualización
+          const updateData: any = {
+            status: orderStatus,
+            json: wooCommerceOrder,
+            delivery_address: toNull(transformedOrder.shipping.address_1 || transformedOrder.billing.address_1),
+            delivery_city: toNull(transformedOrder.shipping.city || transformedOrder.billing.city),
+            delivery_contact: toNull(transformedOrder.customer.display_name || transformedOrder.customer.email),
+            delivery_phone: toNull(transformedOrder.shipping.phone || transformedOrder.customer.phone || transformedOrder.billing.phone),
+            transport_company: toNull(transformedOrder.shipping.method),
+            transport_cost: transformedOrder.shipping.total && transformedOrder.shipping.total !== '' && transformedOrder.shipping.total !== '0.00' 
+              ? parseFloat(String(transformedOrder.shipping.total)) 
+              : 0,
+            notes: `Pedido desde WooCommerce${transformedOrder.order_number ? ` - Order #${transformedOrder.order_number}` : ''}${transformedOrder.woocommerce_order_id ? ` (WC ID: ${transformedOrder.woocommerce_order_id})` : ''}${wooCommerceOrder.status ? ` - Estado WC: ${wooCommerceOrder.status}` : ''} - Actualizado: ${new Date().toISOString()}`,
+            total_amount: wooCommerceOrder.total ? parseFloat(String(wooCommerceOrder.total)) : undefined
+          };
+          
+          result = await this.orderService.updateOrder(existingOrderData.id, updateData, userId);
+          actionMessage = 'Pedido actualizado exitosamente';
+        } else {
+          // Si no existe, crear uno nuevo
+          console.log(`[${requestId}] ⚠️ Pedido no encontrado para actualizar, creando nuevo`);
+          result = await this.orderService.createOrder(orderData, userId);
+          actionMessage = 'Pedido creado exitosamente (no existía para actualizar)';
+        }
+      } else {
+        // Crear nuevo pedido
+        result = await this.orderService.createOrder(orderData, userId);
+        actionMessage = 'Pedido recibido desde WooCommerce y creado exitosamente';
+      }
 
       if (!result.success) {
         const response: ApiResponse = {
           success: false,
-          message: 'Error al crear pedido',
+          message: action === 'update' ? 'Error al actualizar pedido' : 'Error al crear pedido',
           error: result.error || 'Error desconocido',
           timestamp: new Date().toISOString()
         };
@@ -1020,12 +1138,13 @@ export class IntegrationController {
         return;
       }
 
-      // 6. Retornar pedido creado
+      // 6. Retornar pedido creado/actualizado
       const response: ApiResponse = {
         success: true,
-        message: 'Pedido recibido desde WooCommerce y creado exitosamente',
+        message: actionMessage,
         data: {
           order: result.data,
+          action: action,
           warnings: missingProducts.length > 0 
             ? [`Productos no encontrados: ${missingProducts.join(', ')}`]
             : []
@@ -1033,8 +1152,9 @@ export class IntegrationController {
         timestamp: new Date().toISOString()
       };
 
-      console.log(`[${requestId}] ✅ Pedido creado exitosamente con ID: ${result.data?.id}`);
-      res.status(201).json(response);
+      const actionLabel = action === 'update' ? 'actualizado' : 'creado';
+      console.log(`[${requestId}] ✅ Pedido ${actionLabel} exitosamente con ID: ${result.data?.id}`);
+      res.status(action === 'update' ? 200 : 201).json(response);
 
     } catch (error) {
       console.error(`[${requestId}] ❌ ERROR GENERAL:`, error);

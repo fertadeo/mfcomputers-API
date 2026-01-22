@@ -156,6 +156,8 @@ export interface UpdateOrderData {
   notes?: string;
   remito_status?: 'sin_remito' | 'remito_generado' | 'remito_despachado' | 'remito_entregado';
   stock_reserved?: boolean;
+  json?: any; // ⭐ NUEVO: JSON completo de WooCommerce para actualizaciones
+  total_amount?: number; // ⭐ NUEVO: Total del pedido para actualizaciones
 }
 
 export interface UpdateOrderItemData {

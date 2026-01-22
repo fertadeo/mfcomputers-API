@@ -451,7 +451,13 @@ export class OrderRepository {
             const mysqlDate = this.convertToMySQLDate(value);
             fields.push(`${key} = ?`);
             values.push(mysqlDate);
-          } else {
+          } 
+          // ⭐ NUEVO: Convertir campo JSON a string si es un objeto
+          else if (key === 'json' && typeof value === 'object' && value !== null) {
+            fields.push(`${key} = ?`);
+            values.push(JSON.stringify(value));
+          }
+          else {
             fields.push(`${key} = ?`);
             values.push(value);
           }
