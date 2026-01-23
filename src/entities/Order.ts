@@ -96,6 +96,7 @@ export interface CreateOrderData {
   canal_venta?: string; // 'woocommerce', 'local', etc.
   json?: any; // JSON completo con todos los datos de la orden
   status?: 'pendiente_preparacion' | 'listo_despacho' | 'pagado' | 'aprobado';
+  sync_to_woocommerce?: boolean; // ⭐ NUEVO: Flag para controlar sincronización (por defecto true)
   delivery_date?: string;
   delivery_address?: string;
   delivery_city?: string;
@@ -158,6 +159,8 @@ export interface UpdateOrderData {
   stock_reserved?: boolean;
   json?: any; // ⭐ NUEVO: JSON completo de WooCommerce para actualizaciones
   total_amount?: number; // ⭐ NUEVO: Total del pedido para actualizaciones
+  woocommerce_order_id?: number; // ⭐ NUEVO: ID de WooCommerce para actualizaciones
+  sync_to_woocommerce?: boolean; // ⭐ NUEVO: Flag para controlar sincronización (por defecto true)
 }
 
 export interface UpdateOrderItemData {

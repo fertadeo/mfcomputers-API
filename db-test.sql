@@ -558,6 +558,8 @@ CREATE TABLE IF NOT EXISTS `production_orders` (
 CREATE TABLE IF NOT EXISTS `products` (
   `id` int NOT NULL AUTO_INCREMENT,
   `code` varchar(20) NOT NULL,
+  `barcode` varchar(64) DEFAULT NULL COMMENT 'Valor de código de barras (imprimible)',
+  `qr_code` text DEFAULT NULL COMMENT 'Contenido del QR (imprimible)',
   `name` varchar(100) NOT NULL,
   `description` text,
   `category_id` int DEFAULT NULL,

@@ -64,15 +64,17 @@ export interface Product {
   id: number;
   code: string;
   name: string;
-  description?: string;
-  category_id?: number;
+  description?: string | null;
+  category_id?: number | null;
   category_name?: string;
   price: number;
   stock: number;
   min_stock: number;
   max_stock: number;
   is_active: boolean;
-  images?: string[]; // Array de URLs de imágenes desde WooCommerce
+  images?: string[] | null; // Array de URLs de imágenes desde WooCommerce
+  barcode?: string | null;
+  qr_code?: string | null;
   created_at: string;
   updated_at: string;
 }

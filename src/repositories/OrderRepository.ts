@@ -446,6 +446,11 @@ export class OrderRepository {
       Object.keys(data).forEach(key => {
         const value = data[key as keyof UpdateOrderData];
         if (value !== undefined) {
+          // Ignorar campos que no son de la base de datos
+          if (key === 'sync_to_woocommerce') {
+            return; // No guardar este flag en la BD
+          }
+
           // Convertir fecha de entrega a formato MySQL si existe
           if (key === 'delivery_date' && typeof value === 'string') {
             const mysqlDate = this.convertToMySQLDate(value);

@@ -223,4 +223,456 @@ export class WooCommerceService {
       return null;
     }
   }
+
+  // =====================================================
+  // MÉTODOS PARA PEDIDOS (ORDERS)
+  // =====================================================
+
+  /**
+   * Mapea el estado del ERP al estado de WooCommerce
+   */
+  private mapErpStatusToWooCommerce(erpStatus: string): string {
+    const statusMap: Record<string, string> = {
+      'pendiente_preparacion': 'pending',
+      'en_proceso': 'processing',
+      'aprobado': 'on-hold',
+      'listo_despacho': 'processing',
+      'pagado': 'processing',
+      'completado': 'completed',
+      'cancelado': 'cancelled'
+    };
+    return statusMap[erpStatus] || 'pending';
+  }
+
+  /**
+   * Crea un pedido en WooCommerce desde el ERP
+   */
+  async createOrder(orderData: {
+    customer_id?: number;
+    billing: {
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone?: string;
+      address_1: string;
+      address_2?: string;
+      city: string;
+      state?: string;
+      postcode?: string;
+      country: string;
+      company?: string;
+    };
+    shipping?: {
+      first_name: string;
+      last_name: string;
+      address_1: string;
+      address_2?: string;
+      city: string;
+      state?: string;
+      postcode?: string;
+      country: string;
+      company?: string;
+      phone?: string;
+    };
+    line_items: Array<{
+      product_id: number;
+      quantity: number;
+      price?: number;
+      sku?: string;
+    }>;
+    status?: string;
+    currency?: string;
+    payment_method?: string;
+    payment_method_title?: string;
+    customer_note?: string;
+    meta_data?: Array<{ key: string; value: any }>;
+  }): Promise<{ id: number; number: string; status: string }> {
+    const payload: any = {
+      status: orderData.status ? this.mapErpStatusToWooCommerce(orderData.status) : 'pending',
+      currency: orderData.currency || 'ARS',
+      billing: orderData.billing,
+      shipping: orderData.shipping || orderData.billing, // Si no hay shipping, usar billing
+      line_items: orderData.line_items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price: item.price || undefined
+      })),
+      meta_data: orderData.meta_data || []
+    };
+
+    if (orderData.customer_id) {
+      payload.customer_id = orderData.customer_id;
+    }
+
+    if (orderData.payment_method) {
+      payload.payment_method = orderData.payment_method;
+      payload.payment_method_title = orderData.payment_method_title || orderData.payment_method;
+    }
+
+    if (orderData.customer_note) {
+      payload.customer_note = orderData.customer_note;
+    }
+
+    console.log('[WooCommerceService] Creando pedido en WooCommerce:', { 
+      status: payload.status, 
+      line_items_count: payload.line_items.length 
+    });
+    
+    const result = await this.request('POST', '/orders', payload);
+    
+    return {
+      id: result.id,
+      number: result.number,
+      status: result.status
+    };
+  }
+
+  /**
+   * Actualiza un pedido en WooCommerce
+   */
+  async updateOrder(
+    woocommerceOrderId: number,
+    orderData: {
+      status?: string;
+      billing?: {
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+        phone?: string;
+        address_1?: string;
+        address_2?: string;
+        city?: string;
+        state?: string;
+        postcode?: string;
+        country?: string;
+        company?: string;
+      };
+      shipping?: {
+        first_name?: string;
+        last_name?: string;
+        address_1?: string;
+        address_2?: string;
+        city?: string;
+        state?: string;
+        postcode?: string;
+        country?: string;
+        company?: string;
+        phone?: string;
+      };
+      line_items?: Array<{
+        id?: number;
+        product_id: number;
+        quantity: number;
+        price?: number;
+      }>;
+      customer_note?: string;
+      meta_data?: Array<{ key: string; value: any }>;
+    }
+  ): Promise<{ id: number; number: string; status: string }> {
+    const payload: any = {};
+
+    if (orderData.status) {
+      payload.status = this.mapErpStatusToWooCommerce(orderData.status);
+    }
+
+    if (orderData.billing) {
+      payload.billing = orderData.billing;
+    }
+
+    if (orderData.shipping) {
+      payload.shipping = orderData.shipping;
+    }
+
+    if (orderData.line_items) {
+      payload.line_items = orderData.line_items.map(item => ({
+        id: item.id || undefined,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price: item.price || undefined
+      }));
+    }
+
+    if (orderData.customer_note !== undefined) {
+      payload.customer_note = orderData.customer_note;
+    }
+
+    if (orderData.meta_data) {
+      payload.meta_data = orderData.meta_data;
+    }
+
+    console.log(`[WooCommerceService] Actualizando pedido ${woocommerceOrderId} en WooCommerce:`, payload);
+    const result = await this.request('PUT', `/orders/${woocommerceOrderId}`, payload);
+    
+    return {
+      id: result.id,
+      number: result.number,
+      status: result.status
+    };
+  }
+
+  /**
+   * Elimina un pedido en WooCommerce (soft delete - lo mueve a trash)
+   */
+  async deleteOrder(woocommerceOrderId: number, force: boolean = false): Promise<void> {
+    console.log(`[WooCommerceService] Eliminando pedido ${woocommerceOrderId} en WooCommerce (force: ${force})`);
+    await this.request('DELETE', `/orders/${woocommerceOrderId}?force=${force}`);
+  }
+
+  /**
+   * Obtiene un pedido de WooCommerce por ID
+   */
+  async getOrder(woocommerceOrderId: number): Promise<any | null> {
+    try {
+      const result = await this.request('GET', `/orders/${woocommerceOrderId}`);
+      return result;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Busca un cliente en WooCommerce por email
+   */
+  async findCustomerByEmail(email: string): Promise<{ id: number; email: string; first_name: string; last_name: string } | null> {
+    try {
+      const result = await this.request('GET', `/customers?email=${encodeURIComponent(email)}&per_page=1`);
+      
+      if (Array.isArray(result) && result.length > 0) {
+        const customer = result[0];
+        return {
+          id: customer.id,
+          email: customer.email,
+          first_name: customer.first_name || '',
+          last_name: customer.last_name || ''
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[WooCommerceService] Error buscando cliente por email:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Crea un cliente en WooCommerce
+   */
+  async createCustomer(customerData: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    username?: string;
+    phone?: string;
+    billing?: {
+      first_name?: string;
+      last_name?: string;
+      company?: string;
+      address_1?: string;
+      address_2?: string;
+      city?: string;
+      state?: string;
+      postcode?: string;
+      country?: string;
+      email?: string;
+      phone?: string;
+    };
+  }): Promise<{ id: number; email: string }> {
+    const payload: any = {
+      email: customerData.email,
+      first_name: customerData.first_name,
+      last_name: customerData.last_name
+    };
+
+    if (customerData.username) {
+      payload.username = customerData.username;
+    }
+
+    if (customerData.phone) {
+      payload.phone = customerData.phone;
+    }
+
+    if (customerData.billing) {
+      payload.billing = customerData.billing;
+    }
+
+    console.log('[WooCommerceService] Creando cliente en WooCommerce:', { email: payload.email });
+    const result = await this.request('POST', '/customers', payload);
+    
+    return {
+      id: result.id,
+      email: result.email
+    };
+  }
+
+  /**
+   * Busca un producto en WooCommerce por SKU
+   */
+  async findProductBySku(sku: string): Promise<{ id: number; sku: string; name: string } | null> {
+    try {
+      const result = await this.request('GET', `/products?sku=${encodeURIComponent(sku)}&per_page=1`);
+      
+      if (Array.isArray(result) && result.length > 0) {
+        const product = result[0];
+        return {
+          id: product.id,
+          sku: product.sku,
+          name: product.name
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[WooCommerceService] Error buscando producto por SKU:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene un producto de WooCommerce por ID
+   */
+  async getProduct(woocommerceProductId: number): Promise<any | null> {
+    try {
+      const result = await this.request('GET', `/products/${woocommerceProductId}`);
+      return result;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  // =====================================================
+  // MÉTODOS PARA GESTIÓN DE STOCK
+  // =====================================================
+
+  /**
+   * Actualiza el stock de un producto en WooCommerce
+   * @param woocommerceProductId ID del producto en WooCommerce
+   * @param stockQuantity Nueva cantidad de stock
+   * @param operation Operación: 'set' (establecer), 'add' (sumar), 'subtract' (restar)
+   * @returns Producto actualizado con el nuevo stock
+   */
+  async updateProductStock(
+    woocommerceProductId: number,
+    stockQuantity: number,
+    operation: 'set' | 'add' | 'subtract' = 'set'
+  ): Promise<{ id: number; stock_quantity: number; sku: string }> {
+    try {
+      // Obtener producto actual para calcular nuevo stock
+      const currentProduct = await this.getProduct(woocommerceProductId);
+      if (!currentProduct) {
+        throw new Error(`Producto con ID ${woocommerceProductId} no encontrado en WooCommerce`);
+      }
+
+      let newStock = stockQuantity;
+      const currentStock = currentProduct.stock_quantity || 0;
+
+      if (operation === 'add') {
+        newStock = currentStock + stockQuantity;
+      } else if (operation === 'subtract') {
+        newStock = Math.max(0, currentStock - stockQuantity);
+      }
+
+      const payload: any = {
+        stock_quantity: newStock,
+        manage_stock: true
+      };
+
+      // Actualizar stock_status si es necesario
+      if (newStock > 0) {
+        payload.stock_status = 'instock';
+      } else {
+        payload.stock_status = 'outofstock';
+      }
+
+      console.log(`[WooCommerceService] Actualizando stock del producto ${woocommerceProductId}: ${currentStock} → ${newStock} (operación: ${operation})`);
+      
+      const result = await this.request('PUT', `/products/${woocommerceProductId}`, payload);
+      
+      return {
+        id: result.id,
+        stock_quantity: result.stock_quantity || 0,
+        sku: result.sku || ''
+      };
+    } catch (error) {
+      console.error(`[WooCommerceService] Error actualizando stock del producto ${woocommerceProductId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualiza el stock de múltiples productos en WooCommerce
+   * @param updates Array de actualizaciones: [{ productId, stockQuantity, operation }]
+   * @returns Array con los resultados de cada actualización
+   */
+  async updateMultipleProductsStock(
+    updates: Array<{
+      productId: number;
+      stockQuantity: number;
+      operation?: 'set' | 'add' | 'subtract';
+    }>
+  ): Promise<Array<{ productId: number; success: boolean; stock_quantity?: number; error?: string }>> {
+    const results: Array<{ productId: number; success: boolean; stock_quantity?: number; error?: string }> = [];
+
+    // Procesar actualizaciones en paralelo (con límite de concurrencia)
+    const batchSize = 5; // Procesar 5 productos a la vez para no sobrecargar la API
+    for (let i = 0; i < updates.length; i += batchSize) {
+      const batch = updates.slice(i, i + batchSize);
+      
+      const batchResults = await Promise.allSettled(
+        batch.map(update =>
+          this.updateProductStock(
+            update.productId,
+            update.stockQuantity,
+            update.operation || 'set'
+          )
+        )
+      );
+
+      batchResults.forEach((result, index) => {
+        const update = batch[index];
+        if (result.status === 'fulfilled') {
+          results.push({
+            productId: update.productId,
+            success: true,
+            stock_quantity: result.value.stock_quantity
+          });
+        } else {
+          results.push({
+            productId: update.productId,
+            success: false,
+            error: result.reason instanceof Error ? result.reason.message : 'Error desconocido'
+          });
+        }
+      });
+
+      // Pequeña pausa entre lotes para no sobrecargar la API
+      if (i + batchSize < updates.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Actualiza el stock de un producto en WooCommerce usando su SKU
+   * Útil cuando solo se conoce el SKU del producto
+   */
+  async updateProductStockBySku(
+    sku: string,
+    stockQuantity: number,
+    operation: 'set' | 'add' | 'subtract' = 'set'
+  ): Promise<{ id: number; stock_quantity: number; sku: string }> {
+    const product = await this.findProductBySku(sku);
+    if (!product) {
+      throw new Error(`Producto con SKU ${sku} no encontrado en WooCommerce`);
+    }
+
+    return await this.updateProductStock(product.id, stockQuantity, operation);
+  }
 }

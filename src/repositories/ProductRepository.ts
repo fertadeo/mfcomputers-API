@@ -25,6 +25,8 @@ export class ProductRepository {
         p.max_stock,
         p.is_active,
         p.images,
+        p.barcode,
+        p.qr_code,
         p.created_at,
         p.updated_at
       FROM products p
@@ -62,6 +64,8 @@ export class ProductRepository {
         p.max_stock,
         p.is_active,
         p.images,
+        p.barcode,
+        p.qr_code,
         p.created_at,
         p.updated_at
       FROM products p
@@ -103,12 +107,14 @@ export class ProductRepository {
       stock = 0,
       min_stock = 0,
       max_stock = 1000,
-      images
+      images,
+      barcode,
+      qr_code
     } = data;
     
     const insertQuery = `
-      INSERT INTO products (code, name, description, category_id, price, stock, min_stock, max_stock, is_active, images)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      INSERT INTO products (code, name, description, category_id, price, stock, min_stock, max_stock, is_active, images, barcode, qr_code)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
     `;
     
     const result = await executeQuery(insertQuery, [
@@ -120,7 +126,9 @@ export class ProductRepository {
       stock, 
       min_stock, 
       max_stock,
-      images ? JSON.stringify(images) : null
+      images ? JSON.stringify(images) : null,
+      barcode ?? null,
+      qr_code ?? null
     ]);
     
     const newProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [result.insertId]);

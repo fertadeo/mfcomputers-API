@@ -355,5 +355,39 @@ export class OrderController {
       res.status(500).json(response);
     }
   }
+
+  // =====================================================
+  // SINCRONIZACIÓN CON WOOCOMMERCE
+  // =====================================================
+
+  // POST /api/orders/:id/sync-to-woocommerce - Sincronizar pedido a WooCommerce manualmente
+  public async syncOrderToWooCommerce(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      
+      if (isNaN(id)) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'ID de pedido inválido',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const result = await this.orderService.syncOrderToWooCommerceManual(id);
+      
+      res.status(result.success ? 200 : 400).json(result);
+    } catch (error) {
+      console.error('Sync order to WooCommerce controller error:', error);
+      const response: ApiResponse = {
+        success: false,
+        message: 'Error interno del servidor',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(500).json(response);
+    }
+  }
 }
 

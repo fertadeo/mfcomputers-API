@@ -113,44 +113,28 @@ export class ProductController {
         name, 
         description, 
         category_id, 
+        images,
+        barcode,
+        qr_code,
         price, 
         stock = 0, 
         min_stock = 0, 
         max_stock = 1000 
       } = req.body;
       
-      // Check if product code already exists
-      const existingProductResult = await executeQuery(
-        'SELECT id FROM products WHERE code = ?', 
-        [code]
-      );
-      const existingProduct = existingProductResult[0];
-      
-      if (existingProduct) {
-        const response: ApiResponse = {
-          success: false,
-          message: 'Product code already exists',
-          timestamp: new Date().toISOString()
-        };
-        res.status(409).json(response);
-        return;
-      }
-      
-      const insertQuery = `
-        INSERT INTO products (code, name, description, category_id, price, stock, min_stock, max_stock, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `;
-      
-      const result = await executeQuery(insertQuery, [
-        code, name, description, category_id, price, stock, min_stock, max_stock
-      ]);
-      
-      // Get the created product
-      const newProductResult = await executeQuery(
-        'SELECT * FROM products WHERE id = ?', 
-        [result.insertId]
-      );
-      const newProduct = newProductResult[0];
+      const newProduct = await this.productService.createProduct({
+        code,
+        name,
+        description: description ?? null,
+        category_id: category_id ?? null,
+        images: images ?? null,
+        barcode: barcode ?? null,
+        qr_code: qr_code ?? null,
+        price,
+        stock,
+        min_stock,
+        max_stock
+      });
       
       const response: ApiResponse<Product> = {
         success: true,
@@ -162,13 +146,15 @@ export class ProductController {
       res.status(201).json(response);
     } catch (error) {
       console.error('Create product error:', error);
+      const statusCode =
+        error instanceof Error && error.message.includes('ya existe') ? 409 : 500;
       const response: ApiResponse = {
         success: false,
-        message: 'Error creating product',
+        message: statusCode === 409 ? 'Product code already exists' : 'Error creating product',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       };
-      res.status(500).json(response);
+      res.status(statusCode).json(response);
     }
   }
 
@@ -193,6 +179,9 @@ export class ProductController {
         name, 
         description, 
         category_id, 
+        images,
+        barcode,
+        qr_code,
         price, 
         stock, 
         min_stock, 
@@ -200,52 +189,20 @@ export class ProductController {
         is_active 
       } = req.body;
       
-      // Check if product exists
-      const existingProductResult = await executeQuery('SELECT id FROM products WHERE id = ?', [id]);
-      const existingProduct = existingProductResult[0];
-      if (!existingProduct) {
-        const response: ApiResponse = {
-          success: false,
-          message: 'Product not found',
-          timestamp: new Date().toISOString()
-        };
-        res.status(404).json(response);
-        return;
-      }
-      
-      // Check if code is being changed and if new code already exists
-      if (code) {
-        const codeExistsResult = await executeQuery(
-          'SELECT id FROM products WHERE code = ? AND id != ?', 
-          [code, id]
-        );
-        const codeExists = codeExistsResult[0];
-        if (codeExists) {
-          const response: ApiResponse = {
-            success: false,
-            message: 'Product code already exists',
-            timestamp: new Date().toISOString()
-          };
-          res.status(409).json(response);
-          return;
-        }
-      }
-      
-      const updateQuery = `
-        UPDATE products 
-        SET code = ?, name = ?, description = ?, category_id = ?, price = ?, 
-            stock = ?, min_stock = ?, max_stock = ?, is_active = ?
-        WHERE id = ?
-      `;
-      
-      await executeQuery(updateQuery, [
-        code, name, description, category_id, price, 
-        stock, min_stock, max_stock, is_active, id
-      ]);
-      
-      // Get the updated product
-      const updatedProductResult = await executeQuery('SELECT * FROM products WHERE id = ?', [id]);
-      const updatedProduct = updatedProductResult[0];
+      const updatedProduct = await this.productService.updateProduct(Number(id), {
+        code,
+        name,
+        description: description === undefined ? undefined : (description ?? null),
+        category_id: category_id === undefined ? undefined : (category_id ?? null),
+        images: images === undefined ? undefined : (images ?? null),
+        barcode: barcode === undefined ? undefined : (barcode ?? null),
+        qr_code: qr_code === undefined ? undefined : (qr_code ?? null),
+        price,
+        stock,
+        min_stock,
+        max_stock,
+        is_active
+      });
       
       const response: ApiResponse<Product> = {
         success: true,
@@ -257,13 +214,20 @@ export class ProductController {
       res.status(200).json(response);
     } catch (error) {
       console.error('Update product error:', error);
+      const statusCode =
+        error instanceof Error && error.message.includes('no encontrado') ? 404 :
+        error instanceof Error && error.message.includes('ya existe') ? 409 :
+        500;
       const response: ApiResponse = {
         success: false,
-        message: 'Error updating product',
+        message:
+          statusCode === 404 ? 'Product not found' :
+          statusCode === 409 ? 'Product code already exists' :
+          'Error updating product',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       };
-      res.status(500).json(response);
+      res.status(statusCode).json(response);
     }
   }
 

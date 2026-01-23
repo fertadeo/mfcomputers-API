@@ -12,6 +12,11 @@ const createProductValidation = [
   body('code').notEmpty().withMessage('Código es requerido'),
   body('name').notEmpty().withMessage('Nombre es requerido'),
   body('price').isNumeric().withMessage('Precio debe ser numérico'),
+  body('description').optional({ nullable: true }).isString().withMessage('Descripción debe ser texto'),
+  body('category_id').optional({ nullable: true }).isInt().withMessage('Categoría debe ser un número entero'),
+  body('images').optional({ nullable: true }).isArray().withMessage('Imágenes debe ser un array'),
+  body('barcode').optional({ nullable: true }).isString().withMessage('Barcode debe ser texto'),
+  body('qr_code').optional({ nullable: true }).isString().withMessage('QR debe ser texto'),
   body('stock').optional().isInt({ min: 0 }).withMessage('Stock debe ser un número entero positivo'),
   body('min_stock').optional().isInt({ min: 0 }).withMessage('Stock mínimo debe ser un número entero positivo'),
   body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo')
@@ -22,6 +27,11 @@ const updateProductValidation = [
   body('code').optional().notEmpty().withMessage('Código no puede estar vacío'),
   body('name').optional().notEmpty().withMessage('Nombre no puede estar vacío'),
   body('price').optional().isNumeric().withMessage('Precio debe ser numérico'),
+  body('description').optional({ nullable: true }).isString().withMessage('Descripción debe ser texto'),
+  body('category_id').optional({ nullable: true }).isInt().withMessage('Categoría debe ser un número entero'),
+  body('images').optional({ nullable: true }).isArray().withMessage('Imágenes debe ser un array'),
+  body('barcode').optional({ nullable: true }).isString().withMessage('Barcode debe ser texto'),
+  body('qr_code').optional({ nullable: true }).isString().withMessage('QR debe ser texto'),
   body('stock').optional().isInt({ min: 0 }).withMessage('Stock debe ser un número entero positivo'),
   body('min_stock').optional().isInt({ min: 0 }).withMessage('Stock mínimo debe ser un número entero positivo'),
   body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo')

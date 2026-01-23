@@ -143,5 +143,16 @@ router.put('/:id/remito-status',
   orderController.updateRemitoStatus.bind(orderController)
 );
 
+// =====================================================
+// RUTAS DE SINCRONIZACIÓN CON WOOCOMMERCE
+// =====================================================
+
+// POST /api/orders/:id/sync-to-woocommerce - Sincronizar pedido a WooCommerce manualmente
+router.post('/:id/sync-to-woocommerce',
+  authenticateApiKey,
+  validate(idParamValidation),
+  orderController.syncOrderToWooCommerce.bind(orderController)
+);
+
 export default router;
 

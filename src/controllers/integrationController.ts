@@ -1080,8 +1080,10 @@ export class IntegrationController {
         shipping_company: toNull(wooCommerceOrder.shipping?.company),
         total_amount: wooCommerceOrder.total ? parseFloat(String(wooCommerceOrder.total)) : undefined,
         // Guardar TODOS los datos completos de WooCommerce en formato JSON
-        woocommerce_raw_data: wooCommerceOrder
-      };
+        woocommerce_raw_data: wooCommerceOrder,
+        // ⭐ IMPORTANTE: Agregar flag para evitar sincronización de vuelta a WooCommerce (viene de WooCommerce)
+        sync_to_woocommerce: false
+      } as any;
 
       // 4. Obtener o crear usuario del sistema para pedidos automáticos
       const userId = await this.getOrCreateSystemUser();
@@ -1110,7 +1112,9 @@ export class IntegrationController {
               ? parseFloat(String(transformedOrder.shipping.total)) 
               : 0,
             notes: `Pedido desde WooCommerce${transformedOrder.order_number ? ` - Order #${transformedOrder.order_number}` : ''}${transformedOrder.woocommerce_order_id ? ` (WC ID: ${transformedOrder.woocommerce_order_id})` : ''}${wooCommerceOrder.status ? ` - Estado WC: ${wooCommerceOrder.status}` : ''} - Actualizado: ${new Date().toISOString()}`,
-            total_amount: wooCommerceOrder.total ? parseFloat(String(wooCommerceOrder.total)) : undefined
+            total_amount: wooCommerceOrder.total ? parseFloat(String(wooCommerceOrder.total)) : undefined,
+            // ⭐ IMPORTANTE: Desactivar sincronización de vuelta a WooCommerce (viene de WooCommerce)
+            sync_to_woocommerce: false
           };
           
           result = await this.orderService.updateOrder(existingOrderData.id, updateData, userId);
@@ -1118,11 +1122,13 @@ export class IntegrationController {
         } else {
           // Si no existe, crear uno nuevo
           console.log(`[${requestId}] ⚠️ Pedido no encontrado para actualizar, creando nuevo`);
+          // Ya tiene sync_to_woocommerce: false en orderData
           result = await this.orderService.createOrder(orderData, userId);
           actionMessage = 'Pedido creado exitosamente (no existía para actualizar)';
         }
       } else {
         // Crear nuevo pedido
+        // Ya tiene sync_to_woocommerce: false en orderData
         result = await this.orderService.createOrder(orderData, userId);
         actionMessage = 'Pedido recibido desde WooCommerce y creado exitosamente';
       }
@@ -1156,7 +1162,7 @@ export class IntegrationController {
       console.log(`[${requestId}] ✅ Pedido ${actionLabel} exitosamente con ID: ${result.data?.id}`);
       res.status(action === 'update' ? 200 : 201).json(response);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[${requestId}] ❌ ERROR GENERAL:`, error);
       console.error(`[${requestId}] Stack trace:`, error instanceof Error ? error.stack : 'N/A');
       const response: ApiResponse = {

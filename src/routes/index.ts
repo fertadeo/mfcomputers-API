@@ -19,6 +19,7 @@ import accruedExpenseRoutes from './accruedExpenses';
 import accruedLiabilityRoutes from './accruedLiabilities';
 import apiKeyRoutes from './apiKeys';
 import categoryRoutes from './categories';
+import saleRoutes from './sales';
 
 const router = Router();
 
@@ -43,6 +44,7 @@ router.use('/accrued-expenses', accruedExpenseRoutes);
 router.use('/accrued-liabilities', accruedLiabilityRoutes);
 router.use('/api-keys', apiKeyRoutes);
 router.use('/categories', categoryRoutes);
+router.use('/sales', saleRoutes);
 
 // Health check for API routes
 router.get('/', (req, res) => {
@@ -145,7 +147,15 @@ router.get('/', (req, res) => {
       config: 'GET /api/orders/config',
       ready_for_remito: 'GET /api/orders/ready-for-remito',
       reserve_stock: 'POST /api/orders/:id/reserve-stock',
-      update_remito_status: 'PUT /api/orders/:id/remito-status'
+      update_remito_status: 'PUT /api/orders/:id/remito-status',
+      sync_to_woocommerce: 'POST /api/orders/:id/sync-to-woocommerce'
+    },
+    sales: {
+      list: 'GET /api/sales',
+      get_by_id: 'GET /api/sales/:id',
+      create: 'POST /api/sales',
+      stats: 'GET /api/sales/stats',
+      sync_to_woocommerce: 'POST /api/sales/:id/sync'
     },
     purchases: {
       list: 'GET /api/purchases',
