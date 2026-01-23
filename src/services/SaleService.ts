@@ -213,7 +213,7 @@ export class SaleService {
 
       // Preparar line_items para WooCommerce y actualizar stock
       const lineItems = [];
-      const stockUpdates: Array<{ productId: number; quantity: number; operation: 'subtract' }> = [];
+      const stockUpdates: Array<{ productId: number; stockQuantity: number; operation: 'subtract' }> = [];
 
       for (const item of items) {
         // Obtener información del producto
@@ -259,7 +259,7 @@ export class SaleService {
         // Preparar actualización de stock
         stockUpdates.push({
           productId: wcProductId,
-          quantity: item.quantity,
+          stockQuantity: item.quantity,
           operation: 'subtract'
         });
       }
