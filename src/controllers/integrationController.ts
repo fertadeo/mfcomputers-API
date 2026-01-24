@@ -263,10 +263,30 @@ export class IntegrationController {
 
   // POST /api/integration/webhook/woocommerce - Webhook para recibir actualizaciones de WooCommerce
   public async wooCommerceWebhook(req: Request, res: Response): Promise<void> {
+    const startTime = Date.now();
+    const requestId = `WC-PROD-WEBHOOK-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     try {
       const { action, product } = req.body;
       
-      console.log('Webhook recibido de WooCommerce:', { action, product });
+      console.log(`[${requestId}] ========== WEBHOOK PRODUCTO RECIBIDO DE WOOCOMMERCE ==========`);
+      console.log(`[${requestId}] IP: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
+      console.log(`[${requestId}] User-Agent: ${req.get('user-agent') || 'unknown'}`);
+      console.log(`[${requestId}] Content-Type: ${req.get('content-type') || 'not set'}`);
+      console.log(`[${requestId}] Headers:`, {
+        'x-webhook-secret': req.headers['x-webhook-secret'] ? '***presente***' : 'no presente',
+        'x-api-key': req.headers['x-api-key'] ? '***presente***' : 'no presente'
+      });
+      console.log(`[${requestId}] Acción: ${action || 'no action'}`);
+      if (product && typeof product === 'object') {
+        console.log(`[${requestId}] Producto (preview):`, {
+          id: (product as any).id,
+          sku: (product as any).sku,
+          name: (product as any).name,
+          status: (product as any).status,
+          stock_quantity: (product as any).stock_quantity,
+          price: (product as any).price
+        });
+      }
       
       // Productos: guardar JSON completo + actualizar campos básicos (stock/precio/estado)
       if (action && typeof action === 'string' && action.startsWith('product.') && product) {
@@ -307,7 +327,7 @@ export class IntegrationController {
           }
 
           const existingProduct = await this.productService.getProductByCode(sku);
-          console.log('Producto encontrado:', existingProduct);
+          console.log(`[${requestId}] Producto en ERP:`, existingProduct ? { id: existingProduct.id, code: existingProduct.code } : 'NO EXISTE');
 
           if (existingProduct) {
             await this.productService.updateProduct(existingProduct.id, {
@@ -320,6 +340,7 @@ export class IntegrationController {
               woocommerce_id: woocommerce_id,
               woocommerce_json: product
             });
+            console.log(`[${requestId}] ✅ Producto actualizado`, { sku, erp_id: existingProduct.id });
           } else {
             // Si no existe, crear (evita perder el cambio y guarda JSON completo)
             await this.productService.createProduct({
@@ -332,9 +353,12 @@ export class IntegrationController {
               woocommerce_id: woocommerce_id,
               woocommerce_json: product
             });
+            console.log(`[${requestId}] ✅ Producto creado`, { sku, woocommerce_id });
           }
         }
       }
+
+      console.log(`[${requestId}] ========== WEBHOOK PROCESADO EN ${Date.now() - startTime}ms ==========`);      
       
       const response: ApiResponse = {
         success: true,
@@ -345,7 +369,7 @@ export class IntegrationController {
       
       res.status(200).json(response);
     } catch (error) {
-      console.error('WooCommerce webhook error:', error);
+      console.error(`[${requestId}] ❌ Error webhook producto después de ${Date.now() - startTime}ms:`, error);
       const response: ApiResponse = {
         success: false,
         message: 'Error procesando webhook de WooCommerce',

@@ -83,10 +83,22 @@ export class WooCommerceController {
 
   // POST /api/woocommerce/products/sync - Sincronizar productos desde WooCommerce
   public async syncProducts(req: Request, res: Response): Promise<void> {
+    const startTime = Date.now();
+    const requestId = `WC-PROD-SYNC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     try {
       const { products } = req.body;
+
+      console.log(`[${requestId}] ========== INICIANDO SYNC DE PRODUCTOS (WooCommerce → ERP) ==========`);
+      console.log(`[${requestId}] IP: ${req.ip || req.socket.remoteAddress || 'unknown'}`);
+      console.log(`[${requestId}] User-Agent: ${req.get('user-agent') || 'unknown'}`);
+      console.log(`[${requestId}] Content-Type: ${req.get('content-type') || 'not set'}`);
+      console.log(`[${requestId}] Headers:`, {
+        'x-api-key': req.headers['x-api-key'] ? '***presente***' : 'no presente',
+        'x-webhook-secret': req.headers['x-webhook-secret'] ? '***presente***' : 'no presente'
+      });
       
       if (!Array.isArray(products)) {
+        console.error(`[${requestId}] ❌ Formato inválido. products no es array.`);
         const response: ApiResponse = {
           success: false,
           message: 'Formato inválido. Se espera un array de productos.',
@@ -95,8 +107,22 @@ export class WooCommerceController {
         res.status(400).json(response);
         return;
       }
+
+      console.log(`[${requestId}] Total productos recibidos: ${products.length}`);
+      if (products.length > 0) {
+        const sample = products[0];
+        console.log(`[${requestId}] Sample producto[0]:`, {
+          id: sample?.id,
+          sku: sample?.sku,
+          name: sample?.name,
+          status: sample?.status
+        });
+      }
       
       const results = [];
+      let createdCount = 0;
+      let updatedCount = 0;
+      let errorCount = 0;
       
       for (const product of products) {
         const { id: woocommerceIdRaw, sku, stock_quantity, price, name, status, description, images } = product;
@@ -121,22 +147,15 @@ export class WooCommerceController {
         let imageUrls: string[] | undefined;
         if (images) {
           if (Array.isArray(images)) {
-            // Si es un array de objetos con 'src', extraer las URLs
-            imageUrls = images
+            const urls = images
               .map((img: any) => {
-                if (typeof img === 'string') {
-                  return img; // Ya es una URL
-                } else if (img && typeof img === 'object' && img.src) {
-                  return img.src; // Extraer la URL del objeto
-                }
+                if (typeof img === 'string') return img;
+                if (img && typeof img === 'object' && img.src) return img.src;
                 return null;
               })
-              .filter((url: string | null): url is string => url !== null && url !== undefined);
-            
-            // Si no hay URLs válidas, establecer como undefined
-            if (imageUrls.length === 0) {
-              imageUrls = undefined;
-            }
+              .filter((url: any): url is string => typeof url === 'string' && url.length > 0);
+
+            imageUrls = urls.length > 0 ? urls : undefined;
           } else if (typeof images === 'string') {
             // Si es un string (URL única), convertir a array
             imageUrls = [images];
@@ -166,6 +185,7 @@ export class WooCommerceController {
               success: true,
               message: 'Producto actualizado exitosamente'
             });
+            updatedCount++;
           } else {
             // Crear nuevo producto
             await this.productService.createProduct({
@@ -185,8 +205,15 @@ export class WooCommerceController {
               success: true,
               message: 'Producto creado exitosamente'
             });
+            createdCount++;
           }
         } catch (error) {
+          errorCount++;
+          console.error(`[${requestId}] ❌ Error procesando producto`, {
+            sku,
+            woocommerce_id,
+            error: error instanceof Error ? error.message : String(error)
+          });
           results.push({
             sku,
             action: 'error',
@@ -197,18 +224,28 @@ export class WooCommerceController {
       }
       
       const successCount = results.filter(r => r.success).length;
-      const errorCount = results.filter(r => !r.success).length;
+      const computedErrorCount = results.filter(r => !r.success).length;
+      const durationMs = Date.now() - startTime;
+
+      console.log(`[${requestId}] ✅ Sync finalizado en ${durationMs}ms`, {
+        received: products.length,
+        created: createdCount,
+        updated: updatedCount,
+        errors: errorCount,
+        errors_computed: computedErrorCount
+      });
       
       const response: ApiResponse = {
         success: true,
-        message: `Sincronización completada. ${successCount} exitosos, ${errorCount} errores.`,
+        message: `Sincronización completada. ${successCount} exitosos, ${computedErrorCount} errores.`,
         data: { results },
         timestamp: new Date().toISOString()
       };
       
       res.status(200).json(response);
     } catch (error) {
-      console.error('Sync WooCommerce products error:', error);
+      const durationMs = Date.now() - startTime;
+      console.error(`[${requestId}] ❌ Error sincronizando productos después de ${durationMs}ms:`, error);
       const response: ApiResponse = {
         success: false,
         message: 'Error sincronizando productos',
@@ -221,11 +258,17 @@ export class WooCommerceController {
 
   // PUT /api/woocommerce/products/:sku/stock - Actualizar stock específico
   public async updateStock(req: Request, res: Response): Promise<void> {
+    const startTime = Date.now();
+    const requestId = `WC-PROD-STOCK-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     try {
       const { sku } = req.params;
       const { stock_quantity, operation = 'set' } = req.body;
+
+      console.log(`[${requestId}] ========== UPDATE STOCK (Woo → ERP) ==========`);
+      console.log(`[${requestId}] SKU: ${sku} | operation=${operation} | stock_quantity=${stock_quantity}`);
       
       if (typeof stock_quantity !== 'number' || stock_quantity < 0) {
+        console.warn(`[${requestId}] ⚠️ stock_quantity inválido: ${stock_quantity}`);
         const response: ApiResponse = {
           success: false,
           message: 'stock_quantity debe ser un número positivo',
@@ -238,6 +281,7 @@ export class WooCommerceController {
       const product = await this.productService.getProductByCode(sku);
       
       if (!product) {
+        console.warn(`[${requestId}] ⚠️ Producto no encontrado por SKU: ${sku}`);
         const response: ApiResponse = {
           success: false,
           message: 'Producto no encontrado',
@@ -252,6 +296,12 @@ export class WooCommerceController {
         stock_quantity, 
         operation as 'set' | 'add' | 'subtract'
       );
+
+      console.log(`[${requestId}] ✅ Stock actualizado en ${Date.now() - startTime}ms`, {
+        sku: updatedProduct.code,
+        old_stock: product.stock,
+        new_stock: updatedProduct.stock
+      });
       
       const response: ApiResponse = {
         success: true,
@@ -267,7 +317,7 @@ export class WooCommerceController {
       
       res.status(200).json(response);
     } catch (error) {
-      console.error('Update stock error:', error);
+      console.error(`[${requestId}] ❌ Error updateStock:`, error);
       const response: ApiResponse = {
         success: false,
         message: 'Error actualizando stock',
