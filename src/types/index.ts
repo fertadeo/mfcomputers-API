@@ -73,6 +73,8 @@ export interface Product {
   max_stock: number;
   is_active: boolean;
   images?: string[] | null; // Array de URLs de imágenes desde WooCommerce
+  woocommerce_id?: number | null; // ID del producto en WooCommerce
+  woocommerce_json?: any | null; // JSON completo del producto desde WooCommerce (puede ser grande)
   barcode?: string | null;
   qr_code?: string | null;
   created_at: string;
