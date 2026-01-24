@@ -69,6 +69,10 @@ export class ProductService {
   async getProductByCode(code: string): Promise<Product | null> {
     return await this.productRepository.findByCode(code);
   }
+
+  async getWooCommerceJsonByProductId(id: number): Promise<any | null> {
+    return await this.productRepository.getWooCommerceJsonById(id);
+  }
 }
 
 

@@ -18,8 +18,9 @@ const updateStockValidation = [
 
 const syncProductsValidation = [
   body('products').isArray().withMessage('Products debe ser un array'),
+  body('products.*.id').optional({ nullable: true }).isInt().withMessage('id debe ser numérico para cada producto'),
   body('products.*.sku').notEmpty().withMessage('SKU es requerido para cada producto'),
-  body('products.*.stock_quantity').optional({ nullable: true, checkFalsy: true }).isNumeric().withMessage('stock_quantity debe ser numérico para cada producto')
+  body('products.*.stock_quantity').optional({ nullable: true }).isNumeric().withMessage('stock_quantity debe ser numérico para cada producto')
 ];
 
 const syncCategoriesValidation = [

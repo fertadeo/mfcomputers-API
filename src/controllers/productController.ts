@@ -93,6 +93,51 @@ export class ProductController {
     }
   }
 
+  // GET /api/products/:id/woocommerce-json - Obtener JSON completo almacenado desde WooCommerce
+  public async getWooCommerceJson(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const productId = Number(id);
+
+      // Verificar existencia del producto
+      const product = await this.productService.getProductById(productId);
+      if (!product) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Product not found',
+          timestamp: new Date().toISOString()
+        };
+        res.status(404).json(response);
+        return;
+      }
+
+      const woocommerceJson = await this.productService.getWooCommerceJsonByProductId(productId);
+
+      const response: ApiResponse<any> = {
+        success: true,
+        message: woocommerceJson ? 'WooCommerce JSON obtenido exitosamente' : 'El producto no tiene WooCommerce JSON almacenado',
+        data: {
+          id: product.id,
+          code: product.code,
+          woocommerce_id: (product as any).woocommerce_id ?? null,
+          woocommerce_json: woocommerceJson
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Get WooCommerce JSON error:', error);
+      const response: ApiResponse = {
+        success: false,
+        message: 'Error retrieving WooCommerce JSON',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(500).json(response);
+    }
+  }
+
   // POST /api/products - Create new product
   public async createProduct(req: Request, res: Response): Promise<void> {
     try {

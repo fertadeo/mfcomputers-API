@@ -25,6 +25,7 @@ export class ProductRepository {
         p.max_stock,
         p.is_active,
         p.images,
+        p.woocommerce_id,
         p.barcode,
         p.qr_code,
         p.created_at,
@@ -64,6 +65,8 @@ export class ProductRepository {
         p.max_stock,
         p.is_active,
         p.images,
+        p.woocommerce_id,
+        p.woocommerce_json,
         p.barcode,
         p.qr_code,
         p.created_at,
@@ -79,7 +82,10 @@ export class ProductRepository {
     // Parsear JSON de imágenes
     return {
       ...product[0],
-      images: product[0].images ? (typeof product[0].images === 'string' ? JSON.parse(product[0].images) : product[0].images) : null
+      images: product[0].images ? (typeof product[0].images === 'string' ? JSON.parse(product[0].images) : product[0].images) : null,
+      woocommerce_json: product[0].woocommerce_json
+        ? (typeof product[0].woocommerce_json === 'string' ? JSON.parse(product[0].woocommerce_json) : product[0].woocommerce_json)
+        : null
     };
   }
 
@@ -92,7 +98,10 @@ export class ProductRepository {
     // Parsear JSON de imágenes
     return {
       ...product[0],
-      images: product[0].images ? (typeof product[0].images === 'string' ? JSON.parse(product[0].images) : product[0].images) : null
+      images: product[0].images ? (typeof product[0].images === 'string' ? JSON.parse(product[0].images) : product[0].images) : null,
+      woocommerce_json: product[0].woocommerce_json
+        ? (typeof product[0].woocommerce_json === 'string' ? JSON.parse(product[0].woocommerce_json) : product[0].woocommerce_json)
+        : null
     };
   }
 
@@ -108,13 +117,18 @@ export class ProductRepository {
       min_stock = 0,
       max_stock = 1000,
       images,
+      woocommerce_id,
+      woocommerce_json,
       barcode,
       qr_code
     } = data;
     
     const insertQuery = `
-      INSERT INTO products (code, name, description, category_id, price, stock, min_stock, max_stock, is_active, images, barcode, qr_code)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+      INSERT INTO products (
+        code, name, description, category_id, price, stock, min_stock, max_stock,
+        is_active, images, barcode, qr_code, woocommerce_id, woocommerce_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
     `;
     
     const result = await executeQuery(insertQuery, [
@@ -128,7 +142,9 @@ export class ProductRepository {
       max_stock,
       images ? JSON.stringify(images) : null,
       barcode ?? null,
-      qr_code ?? null
+      qr_code ?? null,
+      woocommerce_id ?? null,
+      woocommerce_json ? JSON.stringify(woocommerce_json) : null
     ]);
     
     const newProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [result.insertId]);
@@ -137,7 +153,10 @@ export class ProductRepository {
     // Parsear JSON de imágenes
     return {
       ...newProduct[0],
-      images: newProduct[0].images ? (typeof newProduct[0].images === 'string' ? JSON.parse(newProduct[0].images) : newProduct[0].images) : null
+      images: newProduct[0].images ? (typeof newProduct[0].images === 'string' ? JSON.parse(newProduct[0].images) : newProduct[0].images) : null,
+      woocommerce_json: newProduct[0].woocommerce_json
+        ? (typeof newProduct[0].woocommerce_json === 'string' ? JSON.parse(newProduct[0].woocommerce_json) : newProduct[0].woocommerce_json)
+        : null
     };
   }
 
@@ -152,9 +171,17 @@ export class ProductRepository {
         // Convertir arrays de imágenes a JSON string
         if (key === 'images' && Array.isArray(value)) {
           values.push(JSON.stringify(value));
+        } else if (key === 'woocommerce_json') {
+          // Guardar JSON completo de WooCommerce como string JSON
+          if (value === null) {
+            values.push(null);
+          } else if (typeof value === 'string') {
+            values.push(value);
+          } else {
+            values.push(JSON.stringify(value));
+          }
         } else {
-          // Convertir undefined a null para MySQL
-          values.push(value === undefined ? null : value);
+          values.push(value);
         }
       }
     });
@@ -174,7 +201,10 @@ export class ProductRepository {
     // Parsear JSON de imágenes
     return {
       ...updatedProduct[0],
-      images: updatedProduct[0].images ? (typeof updatedProduct[0].images === 'string' ? JSON.parse(updatedProduct[0].images) : updatedProduct[0].images) : null
+      images: updatedProduct[0].images ? (typeof updatedProduct[0].images === 'string' ? JSON.parse(updatedProduct[0].images) : updatedProduct[0].images) : null,
+      woocommerce_json: updatedProduct[0].woocommerce_json
+        ? (typeof updatedProduct[0].woocommerce_json === 'string' ? JSON.parse(updatedProduct[0].woocommerce_json) : updatedProduct[0].woocommerce_json)
+        : null
     };
   }
 
@@ -201,7 +231,10 @@ export class ProductRepository {
     // Parsear JSON de imágenes
     return {
       ...updatedProduct[0],
-      images: updatedProduct[0].images ? (typeof updatedProduct[0].images === 'string' ? JSON.parse(updatedProduct[0].images) : updatedProduct[0].images) : null
+      images: updatedProduct[0].images ? (typeof updatedProduct[0].images === 'string' ? JSON.parse(updatedProduct[0].images) : updatedProduct[0].images) : null,
+      woocommerce_json: updatedProduct[0].woocommerce_json
+        ? (typeof updatedProduct[0].woocommerce_json === 'string' ? JSON.parse(updatedProduct[0].woocommerce_json) : updatedProduct[0].woocommerce_json)
+        : null
     };
   }
 
@@ -240,5 +273,14 @@ export class ProductRepository {
     
     const stats = await executeQuery(query);
     return stats[0];
+  }
+
+  // Obtener SOLO el JSON completo de WooCommerce de un producto (por ID interno)
+  async getWooCommerceJsonById(id: number): Promise<any | null> {
+    const rows = await executeQuery('SELECT woocommerce_json FROM products WHERE id = ?', [id]) as any[];
+    if (!rows[0]) return null;
+    const raw = rows[0].woocommerce_json;
+    if (!raw) return null;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
   }
 }

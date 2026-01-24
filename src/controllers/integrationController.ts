@@ -268,17 +268,70 @@ export class IntegrationController {
       
       console.log('Webhook recibido de WooCommerce:', { action, product });
       
-      if (action === 'product.updated' && product) {
-        const { sku, stock_quantity } = product;
-        
-         if (sku && typeof stock_quantity === 'number') {
-           // Buscar producto por código
-           const existingProduct = await this.productService.getProductByCode(sku);
-           console.log('Producto encontrado:', existingProduct);
+      // Productos: guardar JSON completo + actualizar campos básicos (stock/precio/estado)
+      if (action && typeof action === 'string' && action.startsWith('product.') && product) {
+        const sku = product.sku;
+        if (sku) {
+          const woocommerceIdRaw = product.id;
+          const woocommerce_id =
+            typeof woocommerceIdRaw === 'number'
+              ? woocommerceIdRaw
+              : (woocommerceIdRaw ? parseInt(String(woocommerceIdRaw), 10) : null);
+
+          const normalizedPrice =
+            product.price !== undefined && product.price !== null && String(product.price).trim() !== ''
+              ? Number(product.price)
+              : (product.regular_price ? Number(product.regular_price) : undefined);
+
+          const normalizedStock =
+            product.stock_quantity !== null && product.stock_quantity !== undefined && String(product.stock_quantity).trim() !== ''
+              ? Number(product.stock_quantity)
+              : undefined;
+
+          // Extraer URLs de imágenes si vienen en formato WC
+          let imageUrls: string[] | undefined;
+          if (product.images) {
+            if (Array.isArray(product.images)) {
+              const urls = product.images
+                .map((img: any) =>
+                  typeof img === 'string'
+                    ? img
+                    : (img && typeof img === 'object' && img.src ? img.src : null)
+                )
+                .filter((url: any): url is string => typeof url === 'string' && url.length > 0);
+
+              imageUrls = urls.length > 0 ? urls : undefined;
+            } else if (typeof product.images === 'string') {
+              imageUrls = [product.images];
+            }
+          }
+
+          const existingProduct = await this.productService.getProductByCode(sku);
+          console.log('Producto encontrado:', existingProduct);
+
           if (existingProduct) {
-            // Actualizar stock en ERP
-            await this.productService.updateStock(existingProduct.id, stock_quantity, 'set');
-            console.log(`Stock actualizado para SKU ${sku}: ${stock_quantity}`);
+            await this.productService.updateProduct(existingProduct.id, {
+              name: product.name !== undefined ? product.name : undefined,
+              description: product.description !== undefined ? product.description : undefined,
+              price: normalizedPrice !== undefined && !Number.isNaN(normalizedPrice) ? normalizedPrice : undefined,
+              stock: normalizedStock !== undefined && !Number.isNaN(normalizedStock) ? normalizedStock : undefined,
+              is_active: product.status ? product.status === 'publish' : undefined,
+              images: imageUrls !== undefined ? imageUrls : undefined,
+              woocommerce_id: woocommerce_id,
+              woocommerce_json: product
+            });
+          } else {
+            // Si no existe, crear (evita perder el cambio y guarda JSON completo)
+            await this.productService.createProduct({
+              code: sku,
+              name: product.name || `Producto ${sku}`,
+              description: product.description || undefined,
+              price: normalizedPrice !== undefined && !Number.isNaN(normalizedPrice) ? normalizedPrice : 0,
+              stock: normalizedStock !== undefined && !Number.isNaN(normalizedStock) ? normalizedStock : 0,
+              images: imageUrls,
+              woocommerce_id: woocommerce_id,
+              woocommerce_json: product
+            });
           }
         }
       }

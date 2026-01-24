@@ -99,7 +99,23 @@ export class WooCommerceController {
       const results = [];
       
       for (const product of products) {
-        const { sku, stock_quantity, price, name, status, description, images } = product;
+        const { id: woocommerceIdRaw, sku, stock_quantity, price, name, status, description, images } = product;
+
+        const woocommerce_id =
+          typeof woocommerceIdRaw === 'number'
+            ? woocommerceIdRaw
+            : (woocommerceIdRaw ? parseInt(String(woocommerceIdRaw), 10) : undefined);
+
+        // Normalizar tipos numéricos (WooCommerce suele enviar strings)
+        const normalizedPrice =
+          price !== undefined && price !== null && String(price).trim() !== ''
+            ? Number(price)
+            : undefined;
+
+        const normalizedStock =
+          stock_quantity !== null && stock_quantity !== undefined && String(stock_quantity).trim() !== ''
+            ? Number(stock_quantity)
+            : undefined;
         
         // Extraer solo las URLs de las imágenes
         let imageUrls: string[] | undefined;
@@ -136,10 +152,12 @@ export class WooCommerceController {
             await this.productService.updateProduct(existingProduct.id, {
               name: name || existingProduct.name,
               description: description !== undefined ? description : existingProduct.description,
-              price: price || existingProduct.price,
-              stock: stock_quantity !== null && stock_quantity !== undefined ? stock_quantity : existingProduct.stock,
+              price: normalizedPrice !== undefined && !Number.isNaN(normalizedPrice) ? normalizedPrice : existingProduct.price,
+              stock: normalizedStock !== undefined && !Number.isNaN(normalizedStock) ? normalizedStock : existingProduct.stock,
               is_active: status === 'publish',
-              images: imageUrls !== undefined ? imageUrls : existingProduct.images
+              images: imageUrls !== undefined ? imageUrls : existingProduct.images,
+              woocommerce_id: woocommerce_id ?? (existingProduct as any).woocommerce_id ?? null,
+              woocommerce_json: product // ⭐ guardar JSON completo
             });
             
             results.push({
@@ -154,9 +172,11 @@ export class WooCommerceController {
               code: sku,
               name: name || `Producto ${sku}`,
               description: description || undefined,
-              price: price || 0,
-              stock: stock_quantity !== null && stock_quantity !== undefined ? stock_quantity : 0,
-              images: imageUrls
+              price: normalizedPrice !== undefined && !Number.isNaN(normalizedPrice) ? normalizedPrice : 0,
+              stock: normalizedStock !== undefined && !Number.isNaN(normalizedStock) ? normalizedStock : 0,
+              images: imageUrls,
+              woocommerce_id: woocommerce_id ?? null,
+              woocommerce_json: product // ⭐ guardar JSON completo
             });
             
             results.push({

@@ -51,6 +51,12 @@ router.use(authenticateJWT);
 router.get('/', authorizeRoles('gerencia', 'ventas', 'logistica', 'finanzas'), productController.getAllProducts.bind(productController));
 router.get('/stats', authorizeRoles('gerencia', 'ventas', 'logistica', 'finanzas'), productController.getProductStats.bind(productController));
 router.get('/stock/low', authorizeRoles('gerencia', 'ventas', 'logistica', 'finanzas'), productController.getLowStockProducts.bind(productController));
+router.get('/:id/woocommerce-json',
+  authorizeRoles('gerencia', 'ventas', 'logistica', 'finanzas'),
+  param('id').isInt().withMessage('ID debe ser un número entero'),
+  validate([param('id').isInt().withMessage('ID debe ser un número entero')]),
+  productController.getWooCommerceJson.bind(productController)
+);
 router.get('/:id', 
   authorizeRoles('gerencia', 'ventas', 'logistica', 'finanzas'),
   param('id').isInt().withMessage('ID debe ser un número entero'),
