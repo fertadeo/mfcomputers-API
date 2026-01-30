@@ -88,6 +88,7 @@ router.get('/', (req, res) => {
       delete: 'DELETE /api/products/:id (soft delete)',
       permanent_delete: 'DELETE /api/products/:id/permanent',
       update_stock: 'PUT /api/products/:id/stock',
+      sync_to_woocommerce: 'POST /api/products/:id/sync-to-woocommerce',
       low_stock: 'GET /api/products/stock/low',
       stats: 'GET /api/products/stats'
     },

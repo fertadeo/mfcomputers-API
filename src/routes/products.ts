@@ -19,7 +19,8 @@ const createProductValidation = [
   body('qr_code').optional({ nullable: true }).isString().withMessage('QR debe ser texto'),
   body('stock').optional().isInt({ min: 0 }).withMessage('Stock debe ser un número entero positivo'),
   body('min_stock').optional().isInt({ min: 0 }).withMessage('Stock mínimo debe ser un número entero positivo'),
-  body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo')
+  body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo'),
+  body('sync_to_woocommerce').optional().isBoolean().withMessage('sync_to_woocommerce debe ser booleano')
 ];
 
 const updateProductValidation = [
@@ -34,7 +35,8 @@ const updateProductValidation = [
   body('qr_code').optional({ nullable: true }).isString().withMessage('QR debe ser texto'),
   body('stock').optional().isInt({ min: 0 }).withMessage('Stock debe ser un número entero positivo'),
   body('min_stock').optional().isInt({ min: 0 }).withMessage('Stock mínimo debe ser un número entero positivo'),
-  body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo')
+  body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo'),
+  body('sync_to_woocommerce').optional().isBoolean().withMessage('sync_to_woocommerce debe ser booleano')
 ];
 
 const updateStockValidation = [
@@ -76,6 +78,12 @@ router.put('/:id',
   updateProductValidation,
   validate(updateProductValidation),
   productController.updateProduct.bind(productController)
+);
+router.post('/:id/sync-to-woocommerce',
+  authorizeRoles('gerencia'),
+  param('id').isInt().withMessage('ID debe ser un número entero'),
+  validate([param('id').isInt().withMessage('ID debe ser un número entero')]),
+  productController.syncProductToWooCommerce.bind(productController)
 );
 router.delete('/:id', 
   authorizeRoles('gerencia'),

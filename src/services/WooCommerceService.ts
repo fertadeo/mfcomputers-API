@@ -545,6 +545,110 @@ export class WooCommerceService {
     }
   }
 
+  /**
+   * Crea un producto en WooCommerce (ERP → WooCommerce)
+   */
+  async createProduct(productData: {
+    name: string;
+    sku: string;
+    type?: string;
+    regular_price: string | number;
+    sale_price?: string | number;
+    description?: string;
+    short_description?: string;
+    manage_stock?: boolean;
+    stock_quantity?: number;
+    stock_status?: 'instock' | 'outofstock';
+    status?: 'publish' | 'draft' | 'pending';
+    images?: Array<{ src: string }>;
+    categories?: Array<{ id?: number; name?: string }>;
+    meta_data?: Array<{ key: string; value: string | number }>;
+  }): Promise<{ id: number; sku: string; name: string }> {
+    const payload: any = {
+      name: productData.name,
+      type: productData.type || 'simple',
+      sku: productData.sku,
+      regular_price: String(productData.regular_price),
+      manage_stock: productData.manage_stock !== false,
+      stock_quantity: productData.stock_quantity ?? 0,
+      stock_status: productData.stock_status || (productData.stock_quantity && productData.stock_quantity > 0 ? 'instock' : 'outofstock'),
+      status: productData.status || 'publish'
+    };
+
+    if (productData.description !== undefined) {
+      payload.description = productData.description;
+    }
+    if (productData.short_description !== undefined) {
+      payload.short_description = productData.short_description;
+    }
+    if (productData.sale_price !== undefined && productData.sale_price !== '') {
+      payload.sale_price = String(productData.sale_price);
+    }
+    if (productData.images && productData.images.length > 0) {
+      payload.images = productData.images;
+    }
+    if (productData.categories && productData.categories.length > 0) {
+      payload.categories = productData.categories;
+    }
+    if (productData.meta_data && productData.meta_data.length > 0) {
+      payload.meta_data = productData.meta_data;
+    }
+
+    console.log('[WooCommerceService] Creando producto en WooCommerce:', { name: payload.name, sku: payload.sku });
+    const result = await this.request('POST', '/products', payload);
+    return {
+      id: result.id,
+      sku: result.sku || payload.sku,
+      name: result.name
+    };
+  }
+
+  /**
+   * Actualiza un producto en WooCommerce (ERP → WooCommerce)
+   */
+  async updateProduct(
+    woocommerceProductId: number,
+    productData: {
+      name?: string;
+      sku?: string;
+      regular_price?: string | number;
+      sale_price?: string | number;
+      description?: string;
+      short_description?: string;
+      manage_stock?: boolean;
+      stock_quantity?: number;
+      stock_status?: 'instock' | 'outofstock';
+      status?: 'publish' | 'draft' | 'pending';
+      images?: Array<{ src: string }>;
+      categories?: Array<{ id?: number; name?: string }>;
+      meta_data?: Array<{ key: string; value: string | number }>;
+    }
+  ): Promise<{ id: number; sku: string; name: string }> {
+    const payload: any = {};
+
+    if (productData.name !== undefined) payload.name = productData.name;
+    if (productData.sku !== undefined) payload.sku = productData.sku;
+    if (productData.regular_price !== undefined) payload.regular_price = String(productData.regular_price);
+    if (productData.sale_price !== undefined) payload.sale_price = String(productData.sale_price);
+    if (productData.description !== undefined) payload.description = productData.description;
+    if (productData.short_description !== undefined) payload.short_description = productData.short_description;
+    if (productData.manage_stock !== undefined) payload.manage_stock = productData.manage_stock;
+    if (productData.stock_quantity !== undefined) payload.stock_quantity = productData.stock_quantity;
+    if (productData.stock_status !== undefined) payload.stock_status = productData.stock_status;
+    if (productData.status !== undefined) payload.status = productData.status;
+    if (productData.images !== undefined) payload.images = productData.images;
+    if (productData.categories !== undefined) payload.categories = productData.categories;
+    if (productData.meta_data !== undefined) payload.meta_data = productData.meta_data;
+
+    console.log('[WooCommerceService] Actualizando producto en WooCommerce:', { id: woocommerceProductId, ...payload });
+    const result = await this.request('PUT', `/products/${woocommerceProductId}`, payload);
+    return {
+      id: result.id,
+      sku: result.sku || '',
+      name: result.name
+    };
+  }
+
   // =====================================================
   // MÉTODOS PARA GESTIÓN DE STOCK
   // =====================================================

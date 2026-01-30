@@ -164,7 +164,8 @@ export class ProductController {
         price, 
         stock = 0, 
         min_stock = 0, 
-        max_stock = 1000 
+        max_stock = 1000,
+        sync_to_woocommerce = false
       } = req.body;
       
       const newProduct = await this.productService.createProduct({
@@ -179,7 +180,7 @@ export class ProductController {
         stock,
         min_stock,
         max_stock
-      });
+      }, sync_to_woocommerce === true);
       
       const response: ApiResponse<Product> = {
         success: true,
@@ -231,7 +232,8 @@ export class ProductController {
         stock, 
         min_stock, 
         max_stock, 
-        is_active 
+        is_active,
+        sync_to_woocommerce = false
       } = req.body;
       
       const updatedProduct = await this.productService.updateProduct(Number(id), {
@@ -247,7 +249,7 @@ export class ProductController {
         min_stock,
         max_stock,
         is_active
-      });
+      }, sync_to_woocommerce === true);
       
       const response: ApiResponse<Product> = {
         success: true,
@@ -269,6 +271,37 @@ export class ProductController {
           statusCode === 404 ? 'Product not found' :
           statusCode === 409 ? 'Product code already exists' :
           'Error updating product',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(statusCode).json(response);
+    }
+  }
+
+  // POST /api/products/:id/sync-to-woocommerce - Sincronizar producto a WooCommerce (crear o actualizar)
+  public async syncProductToWooCommerce(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const productId = Number(id);
+
+      const result = await this.productService.syncProductToWooCommerce(productId);
+
+      const response: ApiResponse<{ woocommerce_id: number; created: boolean }> = {
+        success: true,
+        message: result.created ? 'Producto creado en WooCommerce' : 'Producto actualizado en WooCommerce',
+        data: result,
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Sync product to WooCommerce error:', error);
+      const statusCode =
+        error instanceof Error && error.message.includes('no encontrado') ? 404 :
+        error instanceof Error && error.message.includes('no está configurado') ? 503 : 500;
+      const response: ApiResponse = {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error sincronizando producto a WooCommerce',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       };
