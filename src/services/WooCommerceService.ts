@@ -28,13 +28,11 @@ export class WooCommerceService {
   }
 
   /**
-   * Construye la URL de autenticación básica para WooCommerce REST API
+   * Header Authorization Basic para WooCommerce REST API (evita credenciales en la URL).
    */
-  private getAuthUrl(url: string): string {
-    const urlObj = new URL(url);
-    urlObj.username = this.consumerKey;
-    urlObj.password = this.consumerSecret;
-    return urlObj.toString();
+  private getAuthHeader(): string {
+    const credentials = `${this.consumerKey}:${this.consumerSecret}`;
+    return 'Basic ' + Buffer.from(credentials, 'utf8').toString('base64');
   }
 
   /**
@@ -50,12 +48,12 @@ export class WooCommerceService {
     }
 
     const url = `${this.baseUrl}/wp-json/${this.apiVersion}${endpoint}`;
-    const authUrl = this.getAuthUrl(url);
 
     const options: RequestInit = {
       method,
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': this.getAuthHeader(),
       },
     };
 
@@ -64,7 +62,7 @@ export class WooCommerceService {
     }
 
     try {
-      const response = await fetch(authUrl, options);
+      const response = await fetch(url, options);
       const responseText = await response.text();
       
       let data: any;
