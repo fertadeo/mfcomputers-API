@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import multer from 'multer';
 import { WooCommerceController } from '../controllers/wooCommerceController';
 import { CategoryController } from '../controllers/categoryController';
@@ -13,7 +13,7 @@ const categoryController = new CategoryController();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, acceptFile?: boolean) => void) => {
     const allowed = /^image\/(jpeg|png|gif|webp)$/i.test(file.mimetype);
     if (allowed) cb(null, true);
     else cb(new Error('Solo se permiten imágenes (jpeg, png, gif, webp)'));
@@ -49,7 +49,7 @@ router.get('/products',
 router.post('/media',
   authenticateApiKey,
   (req, res, next) => {
-    upload.array('files', 10)(req, res, (err) => {
+    upload.array('files', 10)(req, res, (err: unknown) => {
       if (err) {
         res.status(400).json({
           success: false,
