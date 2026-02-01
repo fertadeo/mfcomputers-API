@@ -7,12 +7,18 @@ export class WooCommerceService {
   private consumerSecret: string;
   private apiVersion: string;
 
+  /** Usuario y Application Password de WordPress para subir a la galería multimedia (/wp/v2/media) */
+  private wpUser: string;
+  private wpApplicationPassword: string;
+
   constructor() {
     // Obtener configuración desde variables de entorno
     this.baseUrl = process.env.WOOCOMMERCE_URL || '';
     this.consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY || '';
     this.consumerSecret = process.env.WOOCOMMERCE_CONSUMER_SECRET || '';
     this.apiVersion = process.env.WOOCOMMERCE_API_VERSION || 'wc/v3';
+    this.wpUser = process.env.WP_APPLICATION_USER || '';
+    this.wpApplicationPassword = process.env.WP_APPLICATION_PASSWORD || '';
 
     // Validar que las credenciales estén configuradas
     if (!this.baseUrl || !this.consumerKey || !this.consumerSecret) {
@@ -25,6 +31,64 @@ export class WooCommerceService {
    */
   isConfigured(): boolean {
     return !!(this.baseUrl && this.consumerKey && this.consumerSecret);
+  }
+
+  /**
+   * Verifica si hay credenciales de WordPress para subir archivos a la galería multimedia
+   */
+  isWordPressMediaConfigured(): boolean {
+    return !!(this.baseUrl && this.wpUser && this.wpApplicationPassword);
+  }
+
+  /**
+   * Sube un archivo a la galería multimedia de WordPress (wp/v2/media).
+   * Requiere WP_APPLICATION_USER y WP_APPLICATION_PASSWORD en .env.
+   * Devuelve el id y source_url para usar en el producto: images: [{ id }]
+   */
+  async uploadMediaToWordPress(
+    fileBuffer: Buffer,
+    filename: string,
+    mimeType: string
+  ): Promise<{ id: number; source_url: string }> {
+    if (!this.isWordPressMediaConfigured()) {
+      throw new Error(
+        'WordPress Media no está configurado. Configura WP_APPLICATION_USER y WP_APPLICATION_PASSWORD en .env (usuario de WordPress + Application Password).'
+      );
+    }
+
+    const url = `${this.baseUrl.replace(/\/$/, '')}/wp-json/wp/v2/media`;
+    const auth = Buffer.from(`${this.wpUser}:${this.wpApplicationPassword}`, 'utf8').toString('base64');
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Authorization': `Basic ${auth}`,
+      },
+      body: fileBuffer,
+    });
+
+    const responseText = await response.text();
+    let data: any;
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      throw new Error(`Error parseando respuesta de WordPress Media: ${responseText}`);
+    }
+
+    if (!response.ok) {
+      const msg = data?.message || data?.code || `HTTP ${response.status}`;
+      throw new Error(`WordPress Media Error: ${msg}`);
+    }
+
+    const id = typeof data.id === 'number' ? data.id : parseInt(String(data.id), 10);
+    const source_url = data.source_url || data.guid?.rendered || '';
+    if (!id || !source_url) {
+      throw new Error('WordPress no devolvió id o source_url del medio.');
+    }
+
+    return { id, source_url };
   }
 
   /**
@@ -558,7 +622,7 @@ export class WooCommerceService {
     stock_quantity?: number;
     stock_status?: 'instock' | 'outofstock';
     status?: 'publish' | 'draft' | 'pending';
-    images?: Array<{ src: string }>;
+    images?: Array<{ id?: number; src?: string }>;
     categories?: Array<{ id?: number; name?: string }>;
     meta_data?: Array<{ key: string; value: string | number }>;
   }): Promise<{ id: number; sku: string; name: string }> {
@@ -617,7 +681,7 @@ export class WooCommerceService {
       stock_quantity?: number;
       stock_status?: 'instock' | 'outofstock';
       status?: 'publish' | 'draft' | 'pending';
-      images?: Array<{ src: string }>;
+      images?: Array<{ id?: number; src?: string }>;
       categories?: Array<{ id?: number; name?: string }>;
       meta_data?: Array<{ key: string; value: string | number }>;
     }

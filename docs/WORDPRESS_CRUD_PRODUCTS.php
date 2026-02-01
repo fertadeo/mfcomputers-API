@@ -319,28 +319,39 @@ function wc_api_request(string $method, string $path, array $query = [], ?array 
 
 function wc_get_product_full_json(int $productId, string $context = 'edit'): array
 {
-    // context=edit suele traer más datos que context=view (depende permisos).
-    return wc_api_request('GET', '/products/' . $productId, ['context' => $context]);
+    erp_products_log('CRUD GET producto', ['productId' => $productId, 'context' => $context]);
+    $result = wc_api_request('GET', '/products/' . $productId, ['context' => $context]);
+    erp_products_log('CRUD GET producto OK', ['productId' => $productId, 'sku' => $result['sku'] ?? null]);
+    return $result;
 }
 
 function wc_list_products(int $page = 1, int $perPage = 100, array $filters = []): array
 {
+    erp_products_log('CRUD LIST productos', ['page' => $page, 'per_page' => $perPage]);
     $query = array_merge($filters, [
         'page' => $page,
         'per_page' => $perPage,
         'context' => 'edit',
     ]);
-    return wc_api_request('GET', '/products', $query);
+    $result = wc_api_request('GET', '/products', $query);
+    erp_products_log('CRUD LIST productos OK', ['count' => is_array($result) ? count($result) : 0]);
+    return $result;
 }
 
 function wc_create_product(array $productData): array
 {
-    return wc_api_request('POST', '/products', [], $productData);
+    erp_products_log('CRUD CREATE producto', ['name' => $productData['name'] ?? null, 'sku' => $productData['sku'] ?? null]);
+    $result = wc_api_request('POST', '/products', [], $productData);
+    erp_products_log('CRUD CREATE producto OK', ['woocommerce_id' => $result['id'] ?? null, 'sku' => $result['sku'] ?? null]);
+    return $result;
 }
 
 function wc_update_product(int $productId, array $productData): array
 {
-    return wc_api_request('PUT', '/products/' . $productId, [], $productData);
+    erp_products_log('CRUD UPDATE producto', ['productId' => $productId, 'fields' => array_keys($productData)]);
+    $result = wc_api_request('PUT', '/products/' . $productId, [], $productData);
+    erp_products_log('CRUD UPDATE producto OK', ['productId' => $productId, 'sku' => $result['sku'] ?? null]);
+    return $result;
 }
 
 /**
@@ -349,7 +360,10 @@ function wc_update_product(int $productId, array $productData): array
  */
 function wc_soft_delete_product(int $productId): array
 {
-    return wc_api_request('DELETE', '/products/' . $productId, ['force' => 'false']);
+    erp_products_log('CRUD SOFT DELETE producto', ['productId' => $productId]);
+    $result = wc_api_request('DELETE', '/products/' . $productId, ['force' => 'false']);
+    erp_products_log('CRUD SOFT DELETE producto OK', ['productId' => $productId]);
+    return $result;
 }
 
 // ============================================================
@@ -503,7 +517,69 @@ function soft_delete_product_in_wc_and_db(int $productId): array
 }
 
 // ============================================================
-// 7) Ejemplos de uso (CLI)
+// 7) Hooks WordPress: log en debug.log al interactuar con productos
+// ============================================================
+// Al crear/editar/borrar un producto desde el admin de WooCommerce o desde la REST API,
+// se escribe una línea en wp-content/debug.log (requiere WP_DEBUG_LOG = true).
+
+if (function_exists('add_action')) {
+
+    add_action('woocommerce_new_product', 'erp_products_log_on_new_product', 10, 2);
+    function erp_products_log_on_new_product(int $product_id, $product = null): void
+    {
+        $sku = '';
+        if (is_object($product) && method_exists($product, 'get_sku')) {
+            $sku = $product->get_sku();
+        } elseif ($product_id && function_exists('wc_get_product')) {
+            $p = wc_get_product($product_id);
+            $sku = $p ? $p->get_sku() : '';
+        }
+        erp_products_log('WP HOOK: Producto creado (admin/API)', ['product_id' => $product_id, 'sku' => $sku]);
+    }
+
+    add_action('woocommerce_update_product', 'erp_products_log_on_update_product', 10, 2);
+    function erp_products_log_on_update_product(int $product_id, $product = null): void
+    {
+        $sku = '';
+        if (is_object($product) && method_exists($product, 'get_sku')) {
+            $sku = $product->get_sku();
+        } elseif ($product_id && function_exists('wc_get_product')) {
+            $p = wc_get_product($product_id);
+            $sku = $p ? $p->get_sku() : '';
+        }
+        erp_products_log('WP HOOK: Producto actualizado (admin/API)', ['product_id' => $product_id, 'sku' => $sku]);
+    }
+
+    add_action('woocommerce_trash_product', 'erp_products_log_on_trash_product', 10, 1);
+    function erp_products_log_on_trash_product(int $product_id): void
+    {
+        erp_products_log('WP HOOK: Producto enviado a papelera', ['product_id' => $product_id]);
+    }
+
+    add_action('woocommerce_before_delete_product', 'erp_products_log_on_delete_product', 10, 2);
+    function erp_products_log_on_delete_product(int $product_id, $product = null): void
+    {
+        erp_products_log('WP HOOK: Producto eliminado permanentemente', ['product_id' => $product_id]);
+    }
+
+    // Fires on every save (admin + REST API), útil para sync desde ERP
+    add_action('woocommerce_after_product_object_save', 'erp_products_log_on_after_product_save', 10, 2);
+    function erp_products_log_on_after_product_save($product, $data_store = null): void
+    {
+        if (!is_object($product) || !method_exists($product, 'get_id')) {
+            return;
+        }
+        $id = $product->get_id();
+        $sku = method_exists($product, 'get_sku') ? $product->get_sku() : '';
+        $name = method_exists($product, 'get_name') ? $product->get_name() : '';
+        erp_products_log('WP HOOK: Producto guardado (after_save)', ['product_id' => $id, 'sku' => $sku, 'name' => $name]);
+    }
+
+    erp_products_log_once('hooks_products', 'Hooks de productos ERP-PRODUCTS registrados (new_product, update_product, trash_product, before_delete_product, after_product_object_save)', 300);
+}
+
+// ============================================================
+// 8) Ejemplos de uso (CLI)
 // ============================================================
 
 /**

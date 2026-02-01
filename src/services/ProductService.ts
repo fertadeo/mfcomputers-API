@@ -118,6 +118,14 @@ export class ProductService {
     }
 
     const stock = product.stock ?? 0;
+    // Si tenemos IDs de medios de WordPress, usarlos (evita duplicados en galería); si no, usar URLs
+    const imagesPayload =
+      Array.isArray((product as any).woocommerce_image_ids) && (product as any).woocommerce_image_ids.length > 0
+        ? (product as any).woocommerce_image_ids.map((id: number) => ({ id }))
+        : Array.isArray(product.images) && product.images.length > 0
+          ? product.images.map((url: string) => ({ src: url }))
+          : undefined;
+
     const payload = {
       name: product.name,
       sku: product.code,
@@ -128,9 +136,7 @@ export class ProductService {
       stock_quantity: stock,
       stock_status: (stock > 0 ? 'instock' : 'outofstock') as 'instock' | 'outofstock',
       status: (product.is_active ? 'publish' : 'draft') as 'publish' | 'draft',
-      images: Array.isArray(product.images) && product.images.length > 0
-        ? product.images.map((url: string) => ({ src: url }))
-        : undefined,
+      images: imagesPayload,
       categories: (product as ProductWithCategory).category_name
         ? [{ name: (product as ProductWithCategory).category_name }]
         : undefined,

@@ -25,6 +25,7 @@ export class ProductRepository {
         p.max_stock,
         p.is_active,
         p.images,
+        p.woocommerce_image_ids,
         p.woocommerce_id,
         p.barcode,
         p.qr_code,
@@ -37,10 +38,11 @@ export class ProductRepository {
     
     const products = await executeQuery(productsQuery);
     
-    // Parsear JSON de imágenes
+    // Parsear JSON de imágenes y woocommerce_image_ids
     const parsedProducts = products.map((product: any) => ({
       ...product,
-      images: product.images ? (typeof product.images === 'string' ? JSON.parse(product.images) : product.images) : null
+      images: product.images ? (typeof product.images === 'string' ? JSON.parse(product.images) : product.images) : null,
+      woocommerce_image_ids: product.woocommerce_image_ids ? (typeof product.woocommerce_image_ids === 'string' ? JSON.parse(product.woocommerce_image_ids) : product.woocommerce_image_ids) : null
     }));
     
     // Contar total
@@ -65,6 +67,7 @@ export class ProductRepository {
         p.max_stock,
         p.is_active,
         p.images,
+        p.woocommerce_image_ids,
         p.woocommerce_id,
         p.woocommerce_json,
         p.barcode,
@@ -79,10 +82,11 @@ export class ProductRepository {
     const product = await executeQuery(query, [id]);
     if (!product[0]) return null;
     
-    // Parsear JSON de imágenes
+    // Parsear JSON de imágenes, woocommerce_image_ids y woocommerce_json
     return {
       ...product[0],
       images: product[0].images ? (typeof product[0].images === 'string' ? JSON.parse(product[0].images) : product[0].images) : null,
+      woocommerce_image_ids: product[0].woocommerce_image_ids ? (typeof product[0].woocommerce_image_ids === 'string' ? JSON.parse(product[0].woocommerce_image_ids) : product[0].woocommerce_image_ids) : null,
       woocommerce_json: product[0].woocommerce_json
         ? (typeof product[0].woocommerce_json === 'string' ? JSON.parse(product[0].woocommerce_json) : product[0].woocommerce_json)
         : null
@@ -95,13 +99,12 @@ export class ProductRepository {
     const product = await executeQuery(query, [code]);
     if (!product[0]) return null;
     
-    // Parsear JSON de imágenes
+    const row = product[0] as any;
     return {
-      ...product[0],
-      images: product[0].images ? (typeof product[0].images === 'string' ? JSON.parse(product[0].images) : product[0].images) : null,
-      woocommerce_json: product[0].woocommerce_json
-        ? (typeof product[0].woocommerce_json === 'string' ? JSON.parse(product[0].woocommerce_json) : product[0].woocommerce_json)
-        : null
+      ...row,
+      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
+      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
+      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
     };
   }
 
@@ -117,6 +120,7 @@ export class ProductRepository {
       min_stock = 0,
       max_stock = 1000,
       images,
+      woocommerce_image_ids,
       woocommerce_id,
       woocommerce_json,
       barcode,
@@ -126,9 +130,9 @@ export class ProductRepository {
     const insertQuery = `
       INSERT INTO products (
         code, name, description, category_id, price, stock, min_stock, max_stock,
-        is_active, images, barcode, qr_code, woocommerce_id, woocommerce_json
+        is_active, images, woocommerce_image_ids, barcode, qr_code, woocommerce_id, woocommerce_json
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
     `;
     
     const result = await executeQuery(insertQuery, [
@@ -141,6 +145,7 @@ export class ProductRepository {
       min_stock, 
       max_stock,
       images ? JSON.stringify(images) : null,
+      woocommerce_image_ids ? JSON.stringify(woocommerce_image_ids) : null,
       barcode ?? null,
       qr_code ?? null,
       woocommerce_id ?? null,
@@ -150,13 +155,12 @@ export class ProductRepository {
     const newProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [result.insertId]);
     if (!newProduct[0]) throw new Error('Error al crear producto');
     
-    // Parsear JSON de imágenes
+    const row = newProduct[0] as any;
     return {
-      ...newProduct[0],
-      images: newProduct[0].images ? (typeof newProduct[0].images === 'string' ? JSON.parse(newProduct[0].images) : newProduct[0].images) : null,
-      woocommerce_json: newProduct[0].woocommerce_json
-        ? (typeof newProduct[0].woocommerce_json === 'string' ? JSON.parse(newProduct[0].woocommerce_json) : newProduct[0].woocommerce_json)
-        : null
+      ...row,
+      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
+      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
+      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
     };
   }
 
@@ -168,8 +172,10 @@ export class ProductRepository {
     Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined) {
         fields.push(`${key} = ?`);
-        // Convertir arrays de imágenes a JSON string
+        // Convertir arrays a JSON string
         if (key === 'images' && Array.isArray(value)) {
+          values.push(JSON.stringify(value));
+        } else if (key === 'woocommerce_image_ids' && Array.isArray(value)) {
           values.push(JSON.stringify(value));
         } else if (key === 'woocommerce_json') {
           // Guardar JSON completo de WooCommerce como string JSON
@@ -198,13 +204,12 @@ export class ProductRepository {
     const updatedProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [id]);
     if (!updatedProduct[0]) throw new Error('Producto no encontrado después de actualizar');
     
-    // Parsear JSON de imágenes
+    const row = updatedProduct[0] as any;
     return {
-      ...updatedProduct[0],
-      images: updatedProduct[0].images ? (typeof updatedProduct[0].images === 'string' ? JSON.parse(updatedProduct[0].images) : updatedProduct[0].images) : null,
-      woocommerce_json: updatedProduct[0].woocommerce_json
-        ? (typeof updatedProduct[0].woocommerce_json === 'string' ? JSON.parse(updatedProduct[0].woocommerce_json) : updatedProduct[0].woocommerce_json)
-        : null
+      ...row,
+      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
+      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
+      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
     };
   }
 
@@ -228,13 +233,12 @@ export class ProductRepository {
     const updatedProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [id]);
     if (!updatedProduct[0]) throw new Error('Producto no encontrado después de actualizar stock');
     
-    // Parsear JSON de imágenes
+    const row = updatedProduct[0] as any;
     return {
-      ...updatedProduct[0],
-      images: updatedProduct[0].images ? (typeof updatedProduct[0].images === 'string' ? JSON.parse(updatedProduct[0].images) : updatedProduct[0].images) : null,
-      woocommerce_json: updatedProduct[0].woocommerce_json
-        ? (typeof updatedProduct[0].woocommerce_json === 'string' ? JSON.parse(updatedProduct[0].woocommerce_json) : updatedProduct[0].woocommerce_json)
-        : null
+      ...row,
+      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
+      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
+      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
     };
   }
 

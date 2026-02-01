@@ -9,7 +9,8 @@ export interface Product {
   min_stock: number;
   max_stock: number;
   is_active: boolean;
-  images?: string[] | null; // Array de URLs de imágenes desde WooCommerce
+  images?: string[] | null; // Array de URLs de imágenes
+  woocommerce_image_ids?: number[] | null; // IDs de medios en WordPress/WooCommerce (para sync sin duplicar)
   woocommerce_id?: number | null; // ID del producto en WooCommerce
   woocommerce_json?: any | null; // JSON completo del producto desde WooCommerce (puede ser grande)
   barcode?: string | null;
@@ -31,7 +32,8 @@ export interface CreateProductData {
   stock?: number;
   min_stock?: number;
   max_stock?: number;
-  images?: string[] | null; // Array de URLs de imágenes desde WooCommerce
+  images?: string[] | null; // Array de URLs de imágenes
+  woocommerce_image_ids?: number[] | null; // IDs de medios en WordPress (para sync)
   woocommerce_id?: number | null; // ID del producto en WooCommerce
   woocommerce_json?: any | null; // JSON completo del producto desde WooCommerce
   barcode?: string | null;
@@ -40,4 +42,5 @@ export interface CreateProductData {
 
 export interface UpdateProductData extends Partial<CreateProductData> {
   is_active?: boolean;
+  woocommerce_image_ids?: number[] | null;
 }

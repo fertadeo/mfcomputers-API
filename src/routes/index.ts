@@ -104,6 +104,7 @@ router.get('/', (req, res) => {
     woocommerce: {
       products: '/api/woocommerce/products',
       sync_products: '/api/woocommerce/products/sync',
+      upload_media: 'POST /api/woocommerce/media',
       update_stock: '/api/woocommerce/products/:sku/stock'
     },
     logistics: {

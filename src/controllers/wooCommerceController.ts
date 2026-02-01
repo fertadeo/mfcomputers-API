@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
 import { ProductService } from '../services/ProductService';
+import { WooCommerceService } from '../services/WooCommerceService';
 import { ApiResponse } from '../types';
 
 export class WooCommerceController {
   private productService: ProductService;
+  private wooCommerceService: WooCommerceService;
 
   constructor() {
     this.productService = new ProductService();
+    this.wooCommerceService = new WooCommerceService();
   }
 
   // GET /api/woocommerce/products - Obtener productos para WooCommerce
@@ -249,6 +252,53 @@ export class WooCommerceController {
       const response: ApiResponse = {
         success: false,
         message: 'Error sincronizando productos',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(500).json(response);
+    }
+  }
+
+  /**
+   * POST /api/woocommerce/media - Subir archivo(s) a la galería multimedia de WordPress.
+   * Requiere WP_APPLICATION_USER y WP_APPLICATION_PASSWORD en .env.
+   * Devuelve [{ id, source_url }, ...] para usar en producto (images por id o por URL).
+   */
+  public async uploadMedia(req: Request, res: Response): Promise<void> {
+    try {
+      const files = req.files as Express.Multer.File[] | undefined;
+      if (!files || files.length === 0) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'No se enviaron archivos. Usa el campo "files" (múltiple) o "file" (único).',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const uploads: Array<{ id: number; source_url: string }> = [];
+      for (const file of files) {
+        const result = await this.wooCommerceService.uploadMediaToWordPress(
+          file.buffer,
+          file.originalname || 'image',
+          file.mimetype || 'image/jpeg'
+        );
+        uploads.push(result);
+      }
+
+      const response: ApiResponse = {
+        success: true,
+        message: `${uploads.length} archivo(s) subido(s) a la galería de WordPress`,
+        data: { uploads },
+        timestamp: new Date().toISOString()
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('WooCommerce uploadMedia error:', error);
+      const response: ApiResponse = {
+        success: false,
+        message: 'Error subiendo archivo(s) a WordPress',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       };

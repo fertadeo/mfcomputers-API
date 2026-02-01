@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { WooCommerceController } from '../controllers/wooCommerceController';
 import { CategoryController } from '../controllers/categoryController';
 import { body, param } from 'express-validator';
@@ -8,6 +9,16 @@ import { authenticateApiKey, authenticateWebhook } from '../middleware/auth';
 const router = Router();
 const wooCommerceController = new WooCommerceController();
 const categoryController = new CategoryController();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = /^image\/(jpeg|png|gif|webp)$/i.test(file.mimetype);
+    if (allowed) cb(null, true);
+    else cb(new Error('Solo se permiten imágenes (jpeg, png, gif, webp)'));
+  }
+});
 
 // Validation rules
 const updateStockValidation = [
@@ -34,6 +45,24 @@ const syncCategoriesValidation = [
 router.get('/products', 
   authenticateApiKey,
   wooCommerceController.getProducts.bind(wooCommerceController)
+);
+router.post('/media',
+  authenticateApiKey,
+  (req, res, next) => {
+    upload.array('files', 10)(req, res, (err) => {
+      if (err) {
+        res.status(400).json({
+          success: false,
+          message: err instanceof Error ? err.message : 'Error subiendo archivo(s)',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+      next();
+      return;
+    });
+  },
+  wooCommerceController.uploadMedia.bind(wooCommerceController)
 );
 router.post('/products/sync', 
   authenticateApiKey,
