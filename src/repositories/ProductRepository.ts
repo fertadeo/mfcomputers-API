@@ -2,7 +2,7 @@ import { executeQuery } from '../config/database';
 import { Product, ProductWithCategory, CreateProductData, UpdateProductData } from '../entities/Product';
 
 export class ProductRepository {
-  // Obtener todos los productos
+  // Obtener todos los productos con paginación y filtros (evita "Out of sort memory" en tablas grandes)
   async findAll(options: {
     page?: number;
     limit?: number;
@@ -10,7 +10,39 @@ export class ProductRepository {
     search?: string;
     active_only?: boolean;
   } = {}): Promise<{ products: ProductWithCategory[]; total: number }> {
-    // Consulta simple para obtener todos los productos
+    const page = Math.max(1, options.page ?? 1);
+    const limit = Math.min(100, Math.max(1, options.limit ?? 10));
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (options.category_id != null) {
+      conditions.push('p.category_id = ?');
+      params.push(options.category_id);
+    }
+    if (options.search != null && String(options.search).trim() !== '') {
+      conditions.push('(p.name LIKE ? OR p.code LIKE ?)');
+      const searchTerm = `%${String(options.search).trim()}%`;
+      params.push(searchTerm, searchTerm);
+    }
+    if (options.active_only === true) {
+      conditions.push('p.is_active = 1');
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Contar total con los mismos filtros (sin ORDER BY ni LIMIT)
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      ${whereClause}
+    `;
+    const countResult = await executeQuery(countQuery, params);
+    const total = Number(countResult[0]?.total ?? 0);
+
+    // Consulta paginada con LIMIT y OFFSET
     const productsQuery = `
       SELECT 
         p.id,
@@ -33,22 +65,67 @@ export class ProductRepository {
         p.updated_at
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
+      ${whereClause}
       ORDER BY p.name
+      LIMIT ? OFFSET ?
     `;
-    
-    const products = await executeQuery(productsQuery);
-    
+    const products = await executeQuery(productsQuery, [...params, limit, offset]);
+
     // Parsear JSON de imágenes y woocommerce_image_ids
-    const parsedProducts = products.map((product: any) => ({
+    const parsedProducts = (Array.isArray(products) ? products : []).map((product: any) => ({
       ...product,
       images: product.images ? (typeof product.images === 'string' ? JSON.parse(product.images) : product.images) : null,
       woocommerce_image_ids: product.woocommerce_image_ids ? (typeof product.woocommerce_image_ids === 'string' ? JSON.parse(product.woocommerce_image_ids) : product.woocommerce_image_ids) : null
     }));
-    
-    // Contar total
-    const total = parsedProducts.length;
-    
+
     return { products: parsedProducts, total };
+  }
+
+  /**
+   * Resumen de stock para integración: agregados + lista ligera de productos (sin ORDER BY pesado).
+   * Evita cargar todos los productos con findAll y el error "Out of sort memory".
+   */
+  async getStockSummary(): Promise<{
+    summary: { total_products: number; instock: number; lowstock: number; outofstock: number; total_stock_value: number };
+    products: Array<{ code: string; name: string; stock: number; min_stock: number; max_stock: number; is_active: boolean; stock_status: string }>;
+  }> {
+    const countQuery = `
+      SELECT 
+        COUNT(*) as total_products,
+        SUM(CASE WHEN stock > min_stock THEN 1 ELSE 0 END) as instock,
+        SUM(CASE WHEN stock <= min_stock AND stock > 0 THEN 1 ELSE 0 END) as lowstock,
+        SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END) as outofstock,
+        COALESCE(SUM(stock * price), 0) as total_stock_value
+      FROM products
+      WHERE is_active = 1
+    `;
+    const countResult = await executeQuery(countQuery);
+    const row = countResult[0] as any;
+    const summary = {
+      total_products: Number(row?.total_products ?? 0),
+      instock: Number(row?.instock ?? 0),
+      lowstock: Number(row?.lowstock ?? 0),
+      outofstock: Number(row?.outofstock ?? 0),
+      total_stock_value: Number(row?.total_stock_value ?? 0)
+    };
+
+    const listQuery = `
+      SELECT code, name, stock, min_stock, max_stock, is_active
+      FROM products
+      WHERE is_active = 1
+    `;
+    const productsRows = await executeQuery(listQuery);
+    const products = (Array.isArray(productsRows) ? productsRows : []).map((p: any) => ({
+      code: p.code,
+      name: p.name,
+      stock: p.stock ?? 0,
+      min_stock: p.min_stock ?? 0,
+      max_stock: p.max_stock ?? 0,
+      is_active: !!p.is_active,
+      stock_status: p.stock === 0 ? 'outofstock' : (p.stock <= (p.min_stock ?? 0) ? 'lowstock' : 'instock')
+    }));
+
+    return { summary, products };
   }
 
   // Obtener producto por ID

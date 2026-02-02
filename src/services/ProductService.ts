@@ -21,6 +21,10 @@ export class ProductService {
     return await this.productRepository.findAll(options);
   }
 
+  async getStockSummary() {
+    return await this.productRepository.getStockSummary();
+  }
+
   async getProductById(id: number): Promise<ProductWithCategory | null> {
     return await this.productRepository.findById(id);
   }

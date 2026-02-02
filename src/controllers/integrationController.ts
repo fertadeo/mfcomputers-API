@@ -217,18 +217,10 @@ export class IntegrationController {
     }
   }
 
-  // GET /api/integration/stock/summary - Resumen de stock para sincronización
+  // GET /api/integration/stock/summary - Resumen de stock para sincronización (usa consultas ligeras, sin ORDER BY pesado)
   public async getStockSummary(req: Request, res: Response): Promise<void> {
     try {
-      const { products } = await this.productService.getAllProducts({ active_only: true });
-      
-      const summary = {
-        total_products: products.length,
-        instock: products.filter(p => p.stock > p.min_stock).length,
-        lowstock: products.filter(p => p.stock <= p.min_stock && p.stock > 0).length,
-        outofstock: products.filter(p => p.stock === 0).length,
-        total_stock_value: products.reduce((sum, p) => sum + (p.stock * p.price), 0)
-      };
+      const { summary, products } = await this.productService.getStockSummary();
       
       const response: ApiResponse = {
         success: true,
@@ -242,7 +234,7 @@ export class IntegrationController {
             min_stock: p.min_stock,
             max_stock: p.max_stock,
             is_active: p.is_active,
-            stock_status: p.stock === 0 ? 'outofstock' : p.stock <= p.min_stock ? 'lowstock' : 'instock'
+            stock_status: p.stock_status
           }))
         },
         timestamp: new Date().toISOString()
