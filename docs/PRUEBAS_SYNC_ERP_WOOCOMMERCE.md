@@ -90,6 +90,62 @@ Content-Type: application/json
 
 Solo tiene efecto si el producto ya tiene `woocommerce_id`; si no, actualizar en el ERP no dispara sync (evita crear duplicados).
 
+## 3.5 Probar que las imágenes se carguen correctamente (dos procesos)
+
+Las imágenes se manejan en **dos pasos**: (1) subir el archivo a la galería de WordPress, (2) crear o actualizar el producto con esas imágenes y sincronizar a WooCommerce.
+
+### Proceso 1: Subir imagen(es) a la galería de WordPress
+
+1. **Requisito:** Variables `WP_APPLICATION_USER` y `WP_APPLICATION_PASSWORD` en `.env` de la API.
+2. Enviar una petición **multipart/form-data** al endpoint de media:
+
+   ```http
+   POST /api/woocommerce/media
+   X-API-Key: <tu API key>
+   Content-Type: multipart/form-data
+   Body: campo "files" con uno o más archivos (jpeg, png, gif, webp; máx. 10 MB c/u)
+   ```
+
+3. **Resultado esperado:** `200` y body con `data.uploads`: array de `{ id, source_url }`.  
+   Ejemplo: `{ "success": true, "data": { "uploads": [ { "id": 12345, "source_url": "https://tutienda.com/wp-content/uploads/..." } ] } }`.
+4. **Comprobar:** En WordPress → Medios, debe aparecer la imagen recién subida.
+
+### Proceso 2: Crear o actualizar producto con imágenes y sincronizar
+
+1. Usar los `id` y `source_url` devueltos en el paso 1.
+2. **Crear producto** (o actualizar uno existente) con imágenes y opcionalmente sync:
+
+   ```http
+   POST /api/products
+   Authorization: Bearer <token>
+   Content-Type: application/json
+
+   {
+     "code": "TEST-IMG-001",
+     "name": "Producto con imagen",
+     "price": 999,
+     "stock": 5,
+     "images": ["https://tutienda.com/wp-content/uploads/.../foto.jpg"],
+     "woocommerce_image_ids": [12345],
+     "sync_to_woocommerce": true
+   }
+   ```
+
+   (Reemplazá `source_url` e `id` por los del paso 1.)
+
+3. **Resultado esperado:** `201` y producto creado con `images` y `woocommerce_image_ids`. Si `sync_to_woocommerce: true`, el producto debe aparecer en WooCommerce **con la imagen**.
+4. **Si el producto ya existe** (sin sync al crear): llamar después a `POST /api/products/:id/sync-to-woocommerce` con JWT. La API enviará las imágenes por ID (si hay `woocommerce_image_ids`) o por URL (si solo hay `images`); las URLs vacías se filtran y no generan error "No URL Provided".
+
+### Comprobar en WooCommerce que la imagen se cargó
+
+- En WooCommerce → Productos → abrir el producto por SKU (ej. `TEST-IMG-001`).
+- En la pestaña de imagen del producto debe verse la imagen subida.
+- En Medios de WordPress puede estar la misma imagen (si se usó el proceso 1).
+
+### Nota sobre productos con imágenes vacías
+
+Si el producto en el ERP tiene `images` con URLs vacías (`""`) o `woocommerce_image_ids` con valores inválidos (0, null), la API **filtra** esos valores antes de enviar a WooCommerce. El sync no falla con "No URL Provided"; el producto se crea/actualiza en WC sin esas entradas (o sin imágenes si no queda ninguna válida).
+
 ## 4. Comprobar en WooCommerce
 
 - **SKU**: debe coincidir con el `code` del producto en el ERP.

@@ -118,12 +118,20 @@ export class ProductService {
     }
 
     const stock = product.stock ?? 0;
-    // Si tenemos IDs de medios de WordPress, usarlos (evita duplicados en galería); si no, usar URLs
+    // Si tenemos IDs de medios de WordPress, usarlos (evita duplicados en galería); si no, usar URLs.
+    // Filtrar URLs vacías e IDs inválidos para evitar "No URL Provided" de WooCommerce.
+    const woocommerceImageIds = (product as any).woocommerce_image_ids as number[] | undefined;
+    const validIds = Array.isArray(woocommerceImageIds)
+      ? woocommerceImageIds.filter((id: number) => typeof id === 'number' && id > 0)
+      : [];
+    const validUrls = Array.isArray(product.images)
+      ? product.images.filter((url: string) => typeof url === 'string' && url.trim().length > 0)
+      : [];
     const imagesPayload =
-      Array.isArray((product as any).woocommerce_image_ids) && (product as any).woocommerce_image_ids.length > 0
-        ? (product as any).woocommerce_image_ids.map((id: number) => ({ id }))
-        : Array.isArray(product.images) && product.images.length > 0
-          ? product.images.map((url: string) => ({ src: url }))
+      validIds.length > 0
+        ? validIds.map((id: number) => ({ id }))
+        : validUrls.length > 0
+          ? validUrls.map((url: string) => ({ src: url }))
           : undefined;
 
     const payload = {
