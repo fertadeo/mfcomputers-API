@@ -12,7 +12,7 @@ const createCategoryValidation = [
   body('description').optional().isString(),
   body('woocommerce_id').optional().isInt(),
   body('woocommerce_slug').optional().isString(),
-  body('parent_id').optional().isInt()
+  body('parent_id').optional({ nullable: true }).isInt().withMessage('parent_id debe ser un número entero o null')
 ];
 
 const updateCategoryValidation = [
@@ -21,7 +21,7 @@ const updateCategoryValidation = [
   body('description').optional().isString(),
   body('woocommerce_id').optional().isInt(),
   body('woocommerce_slug').optional().isString(),
-  body('parent_id').optional().isInt(),
+  body('parent_id').optional({ nullable: true }).isInt().withMessage('parent_id debe ser un número entero o null'),
   body('is_active').optional().isBoolean()
 ];
 
