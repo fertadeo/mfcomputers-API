@@ -10,9 +10,9 @@ export class ProductRepository {
     search?: string;
     active_only?: boolean;
   } = {}): Promise<{ products: ProductWithCategory[]; total: number }> {
-    const page = Math.max(1, options.page ?? 1);
-    const limit = Math.min(100, Math.max(1, options.limit ?? 10));
-    const offset = (page - 1) * limit;
+    const page = Math.max(1, parseInt(String(options.page ?? 1), 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(String(options.limit ?? 10), 10) || 10));
+    const offset = Math.max(0, (page - 1) * limit);
 
     const conditions: string[] = [];
     const params: any[] = [];
@@ -42,7 +42,7 @@ export class ProductRepository {
     const countResult = await executeQuery(countQuery, params);
     const total = Number(countResult[0]?.total ?? 0);
 
-    // Consulta paginada con LIMIT y OFFSET
+    // Consulta paginada (LIMIT/OFFSET como literales: algunos MySQL/drivers fallan con placeholders ?)
     const productsQuery = `
       SELECT 
         p.id,
@@ -67,9 +67,9 @@ export class ProductRepository {
       LEFT JOIN categories c ON p.category_id = c.id
       ${whereClause}
       ORDER BY p.name
-      LIMIT ? OFFSET ?
+      LIMIT ${limit} OFFSET ${offset}
     `;
-    const products = await executeQuery(productsQuery, [...params, limit, offset]);
+    const products = await executeQuery(productsQuery, params);
 
     // Parsear JSON de imágenes y woocommerce_image_ids
     const parsedProducts = (Array.isArray(products) ? products : []).map((product: any) => ({
