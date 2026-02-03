@@ -349,7 +349,8 @@ export class ProductRepository {
       SELECT 
         COUNT(*) as total_products,
         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_products,
-        SUM(stock) as total_stock_value,
+        SUM(stock) as total_stock_quantity,
+        COALESCE(SUM(stock * price), 0) as total_stock_value,
         AVG(price) as average_price,
         COUNT(CASE WHEN stock <= min_stock THEN 1 END) as low_stock_count,
         COUNT(CASE WHEN stock = 0 THEN 1 END) as out_of_stock_count
