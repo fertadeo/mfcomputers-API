@@ -12,36 +12,39 @@ export class ProductController {
   }
 
   // GET /api/products - Get all products with pagination and filters
+  // Query: page, limit (default 10; máx 10000), all=true o limit=0 para traer todos sin paginar
   public async getAllProducts(req: Request, res: Response): Promise<void> {
     try {
-      const { page = 1, limit = 10, category_id, search, active_only = 'true' } = req.query;
-      const pageNum = Number(page);
-      const limitNum = Number(limit);
-      
-      // Usar el servicio en lugar de lógica SQL directa
+      const { page = 1, limit = 10, all, category_id, search, active_only = 'true' } = req.query;
+      const wantAll = all === 'true' || all === '1' || String(limit) === '0';
+      const pageNum = Math.max(1, Number(page) || 1);
+      const limitNum = wantAll ? 10 : Math.max(1, Number(limit) || 10);
+
       const result = await this.productService.getAllProducts({
-        page: pageNum,
+        page: wantAll ? 1 : pageNum,
         limit: limitNum,
+        all: wantAll,
         category_id: category_id ? Number(category_id) : undefined,
         search: search as string,
         active_only: active_only === 'true'
       });
-      
+
+      const effectiveLimit = wantAll ? result.products.length : limitNum;
       const response: ApiResponse<any> = {
         success: true,
         message: 'Products retrieved successfully',
         data: {
           products: result.products,
           pagination: {
-            page: pageNum,
-            limit: limitNum,
+            page: wantAll ? 1 : pageNum,
+            limit: effectiveLimit,
             total: result.total,
-            totalPages: Math.ceil(result.total / limitNum)
+            totalPages: wantAll ? 1 : Math.ceil(result.total / limitNum)
           }
         },
         timestamp: new Date().toISOString()
       };
-      
+
       res.status(200).json(response);
     } catch (error) {
       console.error('Get products error:', error);

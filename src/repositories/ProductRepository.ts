@@ -14,7 +14,8 @@ export class ProductRepository {
   } = {}): Promise<{ products: ProductWithCategory[]; total: number }> {
     const useAll = options.all === true;
     const page = Math.max(1, parseInt(String(options.page ?? 1), 10) || 1);
-    const limit = useAll ? 0 : Math.min(100, Math.max(1, parseInt(String(options.limit ?? 10), 10) || 10));
+    // Sin cap estricto: permitir hasta 10000 por página; all=true omite LIMIT
+    const limit = useAll ? 0 : Math.min(10000, Math.max(1, parseInt(String(options.limit ?? 10), 10) || 10));
     const offset = useAll ? 0 : Math.max(0, (page - 1) * limit);
 
     const conditions: string[] = [];
