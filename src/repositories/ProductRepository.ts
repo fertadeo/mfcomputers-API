@@ -3,16 +3,19 @@ import { Product, ProductWithCategory, CreateProductData, UpdateProductData } fr
 
 export class ProductRepository {
   // Obtener todos los productos con paginación y filtros (evita "Out of sort memory" en tablas grandes)
+  // Con all: true devuelve todos los productos sin LIMIT (para integración WooCommerce, etc.)
   async findAll(options: {
     page?: number;
     limit?: number;
     category_id?: number;
     search?: string;
     active_only?: boolean;
+    all?: boolean;
   } = {}): Promise<{ products: ProductWithCategory[]; total: number }> {
+    const useAll = options.all === true;
     const page = Math.max(1, parseInt(String(options.page ?? 1), 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(String(options.limit ?? 10), 10) || 10));
-    const offset = Math.max(0, (page - 1) * limit);
+    const limit = useAll ? 0 : Math.min(100, Math.max(1, parseInt(String(options.limit ?? 10), 10) || 10));
+    const offset = useAll ? 0 : Math.max(0, (page - 1) * limit);
 
     const conditions: string[] = [];
     const params: any[] = [];
@@ -67,7 +70,7 @@ export class ProductRepository {
       LEFT JOIN categories c ON p.category_id = c.id
       ${whereClause}
       ORDER BY p.name
-      LIMIT ${limit} OFFSET ${offset}
+      ${useAll ? '' : `LIMIT ${limit} OFFSET ${offset}`}
     `;
     const products = await executeQuery(productsQuery, params);
 

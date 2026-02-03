@@ -17,6 +17,7 @@ export class ProductService {
     category_id?: number;
     search?: string;
     active_only?: boolean;
+    all?: boolean;
   } = {}) {
     return await this.productRepository.findAll(options);
   }

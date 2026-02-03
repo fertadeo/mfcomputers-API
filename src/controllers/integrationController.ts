@@ -50,18 +50,12 @@ export class IntegrationController {
     }
   }
 
-  // GET /api/integration/products/woocommerce - Obtener productos formateados para WooCommerce
+  // GET /api/integration/products/woocommerce - Obtener todos los productos formateados para WooCommerce (find all)
   public async getProductsForWooCommerce(req: Request, res: Response): Promise<void> {
     try {
-      const { page = 1, per_page = 10 } = req.query;
-      
-      const pageNum = parseInt(String(page), 10) || 1;
-      const perPageNum = parseInt(String(per_page), 10) || 10;
-      
       const { products, total } = await this.productService.getAllProducts({
-        page: pageNum,
-        limit: perPageNum,
-        active_only: true
+        active_only: true,
+        all: true
       });
       
       // Formatear productos para WooCommerce
@@ -103,12 +97,7 @@ export class IntegrationController {
         message: 'Productos formateados para WooCommerce obtenidos exitosamente',
         data: {
           products: wooCommerceProducts,
-          pagination: {
-            page: pageNum,
-            per_page: perPageNum,
-            total,
-            total_pages: Math.ceil(total / perPageNum)
-          }
+          total
         },
         timestamp: new Date().toISOString()
       };
