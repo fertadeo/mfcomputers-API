@@ -69,6 +69,37 @@ export class ProductService {
       }
     }
 
+    // Merge inteligente de imágenes: combinar existentes con nuevas (evitar duplicados)
+    // Si images viene como undefined, mantener las existentes sin cambios
+    // Si images viene como null o [], limpiar todas las imágenes
+    // Si images viene como array con valores, combinar existentes + nuevas (sin duplicados)
+    if (data.images !== undefined) {
+      const existingImages = Array.isArray(existingProduct.images) ? existingProduct.images : [];
+      
+      if (data.images === null || (Array.isArray(data.images) && data.images.length === 0)) {
+        // Limpiar todas las imágenes
+        data.images = null;
+      } else if (Array.isArray(data.images)) {
+        // Combinar existentes + nuevas, evitando duplicados
+        const newImages = data.images.filter((url: string) => 
+          typeof url === 'string' && url.trim().length > 0
+        );
+        const combinedImages = [...existingImages];
+        
+        for (const newUrl of newImages) {
+          const trimmedUrl = newUrl.trim();
+          // Evitar duplicados (comparación case-insensitive)
+          if (!combinedImages.some((existing: string) => 
+            typeof existing === 'string' && existing.trim().toLowerCase() === trimmedUrl.toLowerCase()
+          )) {
+            combinedImages.push(trimmedUrl);
+          }
+        }
+        
+        data.images = combinedImages.length > 0 ? combinedImages : null;
+      }
+    }
+
     const updated = await this.productRepository.update(id, data);
 
     if (syncToWooCommerce && existingProduct.woocommerce_id && this.wooCommerceService.isConfigured()) {
@@ -141,12 +172,14 @@ export class ProductService {
 
     const p = product as ProductWithCategory;
     // WooCommerce requiere el ID de categoría (no solo el nombre). Las categorías vienen de WC y tienen woocommerce_id.
+    // IMPORTANTE: Siempre enviar categories (incluso si es []), para que WooCommerce actualice las categorías inmediatamente.
+    // Si enviamos undefined, WooCommerce puede mantener las categorías anteriores y no reflejar el cambio hasta que se limpie el caché.
     const categoriesPayload =
       p.category_woocommerce_id != null && p.category_woocommerce_id > 0
         ? [{ id: p.category_woocommerce_id }]
         : p.category_name
           ? [{ name: p.category_name }]
-          : undefined;
+          : []; // Array vacío para limpiar categorías anteriores si no hay categoría asignada
 
     const payload = {
       name: product.name,
@@ -167,9 +200,17 @@ export class ProductService {
     };
 
     console.log('[ProductService] Sync a WooCommerce - Payload completo:', JSON.stringify(payload, null, 2));
+    console.log('[ProductService] Categorías que se enviarán a WooCommerce:', JSON.stringify(payload.categories, null, 2));
 
     if (product.woocommerce_id) {
-      await this.wooCommerceService.updateProduct(product.woocommerce_id, payload);
+      const updateResult = await this.wooCommerceService.updateProduct(product.woocommerce_id, payload);
+      
+      // Verificar que las categorías se actualizaron correctamente haciendo un GET del producto
+      const updatedProduct = await this.wooCommerceService.getProduct(product.woocommerce_id);
+      if (updatedProduct) {
+        console.log('[ProductService] ✅ Verificación post-actualización - Categorías en WooCommerce:', JSON.stringify(updatedProduct.categories || [], null, 2));
+      }
+      
       return { woocommerce_id: product.woocommerce_id, created: false };
     }
 
@@ -177,11 +218,25 @@ export class ProductService {
     const wcProduct = await this.wooCommerceService.findProductBySku(product.code);
     if (wcProduct) {
       await this.productRepository.update(productId, { woocommerce_id: wcProduct.id });
-      await this.wooCommerceService.updateProduct(wcProduct.id, payload);
+      const updateResult = await this.wooCommerceService.updateProduct(wcProduct.id, payload);
+      
+      // Verificar que las categorías se actualizaron correctamente
+      const updatedProduct = await this.wooCommerceService.getProduct(wcProduct.id);
+      if (updatedProduct) {
+        console.log('[ProductService] ✅ Verificación post-actualización - Categorías en WooCommerce:', JSON.stringify(updatedProduct.categories || [], null, 2));
+      }
+      
       return { woocommerce_id: wcProduct.id, created: false };
     }
 
     const created = await this.wooCommerceService.createProduct(payload);
+    
+    // Verificar que las categorías se asignaron correctamente
+    const createdProduct = await this.wooCommerceService.getProduct(created.id);
+    if (createdProduct) {
+      console.log('[ProductService] ✅ Verificación post-creación - Categorías en WooCommerce:', JSON.stringify(createdProduct.categories || [], null, 2));
+    }
+    
     await this.productRepository.update(productId, { woocommerce_id: created.id });
     return { woocommerce_id: created.id, created: true };
   }

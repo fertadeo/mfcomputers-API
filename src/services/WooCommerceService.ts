@@ -676,6 +676,17 @@ export class WooCommerceService {
 
     console.log('[WooCommerceService] Creando producto en WooCommerce. Payload completo:', JSON.stringify(payload, null, 2));
     const result = await this.request('POST', '/products', payload);
+    
+    // Verificar que las categorías se asignaron correctamente y loguear la respuesta completa
+    console.log('[WooCommerceService] Respuesta de creación - Categorías asignadas:', JSON.stringify(result.categories || [], null, 2));
+    console.log('[WooCommerceService] Respuesta completa de WooCommerce:', JSON.stringify({
+      id: result.id,
+      name: result.name,
+      sku: result.sku,
+      categories: result.categories || [],
+      status: result.status
+    }, null, 2));
+    
     return {
       id: result.id,
       sku: result.sku || payload.sku,
@@ -722,6 +733,17 @@ export class WooCommerceService {
 
     console.log('[WooCommerceService] Actualizando producto en WooCommerce. ID:', woocommerceProductId, 'Payload completo:', JSON.stringify(payload, null, 2));
     const result = await this.request('PUT', `/products/${woocommerceProductId}`, payload);
+    
+    // Verificar que las categorías se actualizaron correctamente y loguear la respuesta completa
+    console.log('[WooCommerceService] Respuesta de actualización - Categorías actualizadas:', JSON.stringify(result.categories || [], null, 2));
+    console.log('[WooCommerceService] Respuesta completa de WooCommerce:', JSON.stringify({
+      id: result.id,
+      name: result.name,
+      sku: result.sku,
+      categories: result.categories || [],
+      status: result.status
+    }, null, 2));
+    
     return {
       id: result.id,
       sku: result.sku || '',
