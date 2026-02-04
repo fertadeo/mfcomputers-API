@@ -1,6 +1,7 @@
 import { ProductRepository } from '../repositories/ProductRepository';
 import { Product, ProductWithCategory, CreateProductData, UpdateProductData } from '../entities/Product';
 import { WooCommerceService } from './WooCommerceService';
+import { logger } from '../utils/logger';
 
 export class ProductService {
   private productRepository: ProductRepository;
@@ -47,7 +48,7 @@ export class ProductService {
           if (updated) return updated;
         }
       } catch (error) {
-        console.error('[ProductService] Error sincronizando producto a WooCommerce tras crear:', error);
+        logger.product.error('Error sincronizando producto a WooCommerce tras crear:', error);
       }
     }
 
@@ -69,46 +70,46 @@ export class ProductService {
       }
     }
 
-    // Merge inteligente de imágenes: combinar existentes con nuevas (evitar duplicados)
-    // Si images viene como undefined, mantener las existentes sin cambios
-    // Si images viene como null o [], limpiar todas las imágenes
-    // Si images viene como array con valores, combinar existentes + nuevas (sin duplicados)
+    // Opción A: images como lista final (reemplazo). No merge.
+    // - undefined: no cambiar imágenes
+    // - null o []: limpiar todas
+    // - array con URLs: reemplazar por esa lista. Al cambiar imágenes, limpiar woocommerce_image_ids para que el próximo sync use URLs y actualice la galería en WC.
     if (data.images !== undefined) {
       const existingImages = Array.isArray(existingProduct.images) ? existingProduct.images : [];
-      
+      const existingIds = (existingProduct as any).woocommerce_image_ids as number[] | undefined;
+      const hadIds = Array.isArray(existingIds) && existingIds.length > 0;
+
       if (data.images === null || (Array.isArray(data.images) && data.images.length === 0)) {
-        // Limpiar todas las imágenes
         data.images = null;
+        data.woocommerce_image_ids = null;
+        logger.product.images(`Producto id=${id}: galería limpiada (0 imágenes). woocommerce_image_ids limpiado para próximo sync.`);
       } else if (Array.isArray(data.images)) {
-        // Combinar existentes + nuevas, evitando duplicados
-        const newImages = data.images.filter((url: string) => 
-          typeof url === 'string' && url.trim().length > 0
-        );
-        const combinedImages = [...existingImages];
-        
-        for (const newUrl of newImages) {
-          const trimmedUrl = newUrl.trim();
-          // Evitar duplicados (comparación case-insensitive)
-          if (!combinedImages.some((existing: string) => 
-            typeof existing === 'string' && existing.trim().toLowerCase() === trimmedUrl.toLowerCase()
-          )) {
-            combinedImages.push(trimmedUrl);
-          }
+        const validUrls = data.images
+          .filter((url: string) => typeof url === 'string' && url.trim().length > 0)
+          .map((url: string) => url.trim());
+        data.images = validUrls.length > 0 ? validUrls : null;
+        data.woocommerce_image_ids = null;
+        if (hadIds) {
+          logger.product.images(`Producto id=${id}: galería reemplazada por ${validUrls.length} imagen(es). woocommerce_image_ids limpiado para que sync envíe URLs a WooCommerce.`);
+        } else {
+          logger.product.images(`Producto id=${id}: galería reemplazada por ${validUrls.length} imagen(es).`);
         }
-        
-        data.images = combinedImages.length > 0 ? combinedImages : null;
+        logger.product.images(`  Antes: ${existingImages.length} URL(s). Después: ${validUrls.length} URL(s).`, validUrls);
       }
     }
+
+    logger.product.update(`Producto id=${id}: aplicando actualización.`, Object.keys(data).filter(k => data[k as keyof UpdateProductData] !== undefined));
 
     const updated = await this.productRepository.update(id, data);
 
     if (syncToWooCommerce && existingProduct.woocommerce_id && this.wooCommerceService.isConfigured()) {
       try {
+        logger.product.sync(`Producto id=${id}: iniciando sync a WooCommerce (woocommerce_id=${existingProduct.woocommerce_id}).`);
         await this.syncProductToWooCommerce(id);
         const reloaded = await this.productRepository.findById(id);
         if (reloaded) return reloaded;
       } catch (error) {
-        console.error('[ProductService] Error sincronizando producto a WooCommerce tras actualizar:', error);
+        logger.product.error('Error sincronizando producto a WooCommerce tras actualizar:', error);
       }
     }
 
@@ -170,6 +171,14 @@ export class ProductService {
           ? validUrls.map((url: string) => ({ src: url }))
           : undefined;
 
+    if (validIds.length > 0) {
+      logger.product.sync(`Producto id=${productId}: enviando a WooCommerce ${validIds.length} imagen(es) por ID de medio.`, validIds);
+    } else if (validUrls.length > 0) {
+      logger.product.sync(`Producto id=${productId}: enviando a WooCommerce ${validUrls.length} imagen(es) por URL.`, validUrls.slice(0, 3).concat(validUrls.length > 3 ? ['...'] : []));
+    } else {
+      logger.product.sync(`Producto id=${productId}: sin imágenes en payload (galería vacía o sin datos).`);
+    }
+
     const p = product as ProductWithCategory;
     // WooCommerce requiere el ID de categoría (no solo el nombre). Las categorías vienen de WC y tienen woocommerce_id.
     // IMPORTANTE: Siempre enviar categories (incluso si es []), para que WooCommerce actualice las categorías inmediatamente.
@@ -199,33 +208,25 @@ export class ProductService {
       ]
     };
 
-    console.log('[ProductService] Sync a WooCommerce - Payload completo:', JSON.stringify(payload, null, 2));
-    console.log('[ProductService] Categorías que se enviarán a WooCommerce:', JSON.stringify(payload.categories, null, 2));
+    logger.product.sync(`Producto id=${productId}: payload preparado (name, sku, price, stock, images, categories).`);
 
     if (product.woocommerce_id) {
-      const updateResult = await this.wooCommerceService.updateProduct(product.woocommerce_id, payload);
-      
-      // Verificar que las categorías se actualizaron correctamente haciendo un GET del producto
+      await this.wooCommerceService.updateProduct(product.woocommerce_id, payload);
       const updatedProduct = await this.wooCommerceService.getProduct(product.woocommerce_id);
       if (updatedProduct) {
-        console.log('[ProductService] ✅ Verificación post-actualización - Categorías en WooCommerce:', JSON.stringify(updatedProduct.categories || [], null, 2));
+        logger.product.sync(`Producto id=${productId}: actualizado en WooCommerce. Categorías:`, updatedProduct.categories?.length ?? 0);
       }
-      
       return { woocommerce_id: product.woocommerce_id, created: false };
     }
 
-    // Si no tiene woocommerce_id, buscar por SKU en WooCommerce (evita error "SKU duplicado")
     const wcProduct = await this.wooCommerceService.findProductBySku(product.code);
     if (wcProduct) {
       await this.productRepository.update(productId, { woocommerce_id: wcProduct.id });
-      const updateResult = await this.wooCommerceService.updateProduct(wcProduct.id, payload);
-      
-      // Verificar que las categorías se actualizaron correctamente
+      await this.wooCommerceService.updateProduct(wcProduct.id, payload);
       const updatedProduct = await this.wooCommerceService.getProduct(wcProduct.id);
       if (updatedProduct) {
-        console.log('[ProductService] ✅ Verificación post-actualización - Categorías en WooCommerce:', JSON.stringify(updatedProduct.categories || [], null, 2));
+        logger.product.sync(`Producto id=${productId}: vinculado y actualizado en WooCommerce (wc_id=${wcProduct.id}).`);
       }
-      
       return { woocommerce_id: wcProduct.id, created: false };
     }
 
@@ -234,9 +235,8 @@ export class ProductService {
     // Verificar que las categorías se asignaron correctamente
     const createdProduct = await this.wooCommerceService.getProduct(created.id);
     if (createdProduct) {
-      console.log('[ProductService] ✅ Verificación post-creación - Categorías en WooCommerce:', JSON.stringify(createdProduct.categories || [], null, 2));
+      logger.product.sync(`Producto id=${productId}: creado en WooCommerce (wc_id=${created.id}). Categorías:`, createdProduct.categories?.length ?? 0);
     }
-    
     await this.productRepository.update(productId, { woocommerce_id: created.id });
     return { woocommerce_id: created.id, created: true };
   }
