@@ -176,6 +176,77 @@ export class ProductService {
     await this.productRepository.update(productId, { woocommerce_id: created.id });
     return { woocommerce_id: created.id, created: true };
   }
+
+  /**
+   * Obtiene woocommerce_id para todos los productos del ERP que coincidan por SKU con WooCommerce.
+   * Recorre los productos de WooCommerce (paginado) y vincula los del ERP que tengan el mismo código.
+   */
+  async bulkLinkProductsFromWooCommerce(): Promise<{
+    linked: number;
+    already_linked: number;
+    not_found_in_erp: number;
+    total_processed: number;
+    errors: string[];
+  }> {
+    if (!this.wooCommerceService.isConfigured()) {
+      throw new Error('WooCommerce no está configurado. Verifica las variables de entorno.');
+    }
+
+    let linked = 0;
+    let already_linked = 0;
+    let not_found_in_erp = 0;
+    const errors: string[] = [];
+    const perPage = 100;
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const wcProducts = await this.wooCommerceService.getAllProductsPaginated(page, perPage);
+      if (wcProducts.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const wcProduct of wcProducts) {
+        if (!wcProduct.sku || wcProduct.sku.trim() === '') {
+          continue;
+        }
+        try {
+          const erpProduct = await this.productRepository.findByCode(wcProduct.sku);
+          if (!erpProduct) {
+            not_found_in_erp++;
+            continue;
+          }
+          if (erpProduct.woocommerce_id) {
+            already_linked++;
+            continue;
+          }
+          await this.productRepository.update(erpProduct.id, {
+            woocommerce_id: wcProduct.id
+          });
+          linked++;
+        } catch (err) {
+          errors.push(
+            `SKU ${wcProduct.sku}: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+
+      if (wcProducts.length < perPage) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
+
+    return {
+      linked,
+      already_linked,
+      not_found_in_erp,
+      total_processed: linked + already_linked + not_found_in_erp,
+      errors
+    };
+  }
 }
 
 

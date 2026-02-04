@@ -316,6 +316,33 @@ export class ProductController {
     }
   }
 
+  // POST /api/products/link-woocommerce-ids - Vincular woocommerce_id de todos los productos por SKU
+  public async bulkLinkProductsFromWooCommerce(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await this.productService.bulkLinkProductsFromWooCommerce();
+
+      const response: ApiResponse<typeof result> = {
+        success: true,
+        message: `Vinculación completada: ${result.linked} vinculados, ${result.already_linked} ya vinculados, ${result.not_found_in_erp} no encontrados en ERP`,
+        data: result,
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Bulk link products from WooCommerce error:', error);
+      const statusCode =
+        error instanceof Error && error.message.includes('no está configurado') ? 503 : 500;
+      const response: ApiResponse = {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error vinculando productos con WooCommerce',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(statusCode).json(response);
+    }
+  }
+
   // PUT /api/products/:id/stock - Update product stock
   public async updateStock(req: Request, res: Response): Promise<void> {
     try {

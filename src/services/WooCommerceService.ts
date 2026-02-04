@@ -570,6 +570,20 @@ export class WooCommerceService {
   }
 
   /**
+   * Obtiene productos de WooCommerce con paginación (para vincular woocommerce_id en lote)
+   * @returns Array de { id, sku, name }. Vacío cuando no hay más páginas.
+   */
+  async getAllProductsPaginated(
+    page: number = 1,
+    perPage: number = 100
+  ): Promise<Array<{ id: number; sku: string; name: string }>> {
+    const result = await this.request('GET', `/products?per_page=${perPage}&page=${page}`);
+    return Array.isArray(result)
+      ? result.map((p: any) => ({ id: p.id, sku: String(p.sku || ''), name: String(p.name || '') }))
+      : [];
+  }
+
+  /**
    * Busca un producto en WooCommerce por SKU
    */
   async findProductBySku(sku: string): Promise<{ id: number; sku: string; name: string } | null> {

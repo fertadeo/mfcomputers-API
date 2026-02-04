@@ -83,6 +83,10 @@ router.put('/:id',
   validate(updateProductValidation),
   productController.updateProduct.bind(productController)
 );
+router.post('/link-woocommerce-ids',
+  authorizeRoles('gerencia'),
+  productController.bulkLinkProductsFromWooCommerce.bind(productController)
+);
 router.post('/:id/sync-to-woocommerce',
   authorizeRoles('gerencia'),
   param('id').isInt().withMessage('ID debe ser un número entero'),
