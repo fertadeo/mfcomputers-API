@@ -142,6 +142,7 @@ export class ProductRepository {
         p.description,
         p.category_id,
         c.name as category_name,
+        c.woocommerce_id as category_woocommerce_id,
         p.price,
         p.stock,
         p.min_stock,

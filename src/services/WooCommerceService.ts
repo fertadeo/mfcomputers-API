@@ -123,6 +123,10 @@ export class WooCommerceService {
 
     if (body) {
       options.body = JSON.stringify(body);
+      if (method === 'POST' || method === 'PUT') {
+        console.log(`[WooCommerceService] Request ${method} ${endpoint}`);
+        console.log('[WooCommerceService] Body completo:', JSON.stringify(body, null, 2));
+      }
     }
 
     try {
@@ -670,7 +674,7 @@ export class WooCommerceService {
       payload.meta_data = productData.meta_data;
     }
 
-    console.log('[WooCommerceService] Creando producto en WooCommerce:', { name: payload.name, sku: payload.sku });
+    console.log('[WooCommerceService] Creando producto en WooCommerce. Payload completo:', JSON.stringify(payload, null, 2));
     const result = await this.request('POST', '/products', payload);
     return {
       id: result.id,
@@ -716,7 +720,7 @@ export class WooCommerceService {
     if (productData.categories !== undefined) payload.categories = productData.categories;
     if (productData.meta_data !== undefined) payload.meta_data = productData.meta_data;
 
-    console.log('[WooCommerceService] Actualizando producto en WooCommerce:', { id: woocommerceProductId, ...payload });
+    console.log('[WooCommerceService] Actualizando producto en WooCommerce. ID:', woocommerceProductId, 'Payload completo:', JSON.stringify(payload, null, 2));
     const result = await this.request('PUT', `/products/${woocommerceProductId}`, payload);
     return {
       id: result.id,

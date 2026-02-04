@@ -21,6 +21,8 @@ export interface Product {
 
 export interface ProductWithCategory extends Product {
   category_name?: string;
+  /** ID de la categoría en WooCommerce (desde categories.woocommerce_id). Necesario para asignar el producto a la categoría correcta al sincronizar. */
+  category_woocommerce_id?: number | null;
 }
 
 export interface CreateProductData {

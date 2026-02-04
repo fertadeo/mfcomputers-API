@@ -139,6 +139,15 @@ export class ProductService {
           ? validUrls.map((url: string) => ({ src: url }))
           : undefined;
 
+    const p = product as ProductWithCategory;
+    // WooCommerce requiere el ID de categoría (no solo el nombre). Las categorías vienen de WC y tienen woocommerce_id.
+    const categoriesPayload =
+      p.category_woocommerce_id != null && p.category_woocommerce_id > 0
+        ? [{ id: p.category_woocommerce_id }]
+        : p.category_name
+          ? [{ name: p.category_name }]
+          : undefined;
+
     const payload = {
       name: product.name,
       sku: product.code,
@@ -150,14 +159,14 @@ export class ProductService {
       stock_status: (stock > 0 ? 'instock' : 'outofstock') as 'instock' | 'outofstock',
       status: (product.is_active ? 'publish' : 'draft') as 'publish' | 'draft',
       images: imagesPayload,
-      categories: (product as ProductWithCategory).category_name
-        ? [{ name: (product as ProductWithCategory).category_name }]
-        : undefined,
+      categories: categoriesPayload,
       meta_data: [
         { key: '_mfcomputers_erp_id', value: String(product.id) },
         { key: '_mfcomputers_erp_code', value: product.code }
       ]
     };
+
+    console.log('[ProductService] Sync a WooCommerce - Payload completo:', JSON.stringify(payload, null, 2));
 
     if (product.woocommerce_id) {
       await this.wooCommerceService.updateProduct(product.woocommerce_id, payload);
