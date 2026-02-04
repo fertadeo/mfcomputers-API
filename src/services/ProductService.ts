@@ -164,6 +164,14 @@ export class ProductService {
       return { woocommerce_id: product.woocommerce_id, created: false };
     }
 
+    // Si no tiene woocommerce_id, buscar por SKU en WooCommerce (evita error "SKU duplicado")
+    const wcProduct = await this.wooCommerceService.findProductBySku(product.code);
+    if (wcProduct) {
+      await this.productRepository.update(productId, { woocommerce_id: wcProduct.id });
+      await this.wooCommerceService.updateProduct(wcProduct.id, payload);
+      return { woocommerce_id: wcProduct.id, created: false };
+    }
+
     const created = await this.wooCommerceService.createProduct(payload);
     await this.productRepository.update(productId, { woocommerce_id: created.id });
     return { woocommerce_id: created.id, created: true };
