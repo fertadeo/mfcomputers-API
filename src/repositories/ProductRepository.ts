@@ -370,4 +370,12 @@ export class ProductRepository {
     if (!raw) return null;
     return typeof raw === 'string' ? JSON.parse(raw) : raw;
   }
+
+  /**
+   * Borrado físico del producto (DELETE FROM products).
+   * Usar solo para borrado permanente; para "borrar" en la app usar update con is_active = false.
+   */
+  async deleteById(id: number): Promise<void> {
+    await executeQuery('DELETE FROM products WHERE id = ?', [id]);
+  }
 }

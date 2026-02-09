@@ -626,6 +626,16 @@ export class WooCommerceService {
   }
 
   /**
+   * Elimina un producto en WooCommerce.
+   * @param woocommerceProductId ID del producto en WooCommerce
+   * @param force true = borrado permanente, false = mover a la papelera (soft delete, por defecto)
+   */
+  async deleteProduct(woocommerceProductId: number, force: boolean = false): Promise<void> {
+    console.log(`[WooCommerceService] Eliminando producto ${woocommerceProductId} en WooCommerce (force: ${force}, papelera: ${!force})`);
+    await this.request('DELETE', `/products/${woocommerceProductId}?force=${force}`);
+  }
+
+  /**
    * Crea un producto en WooCommerce (ERP → WooCommerce)
    */
   async createProduct(productData: {

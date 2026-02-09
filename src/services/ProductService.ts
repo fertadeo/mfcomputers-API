@@ -141,6 +141,50 @@ export class ProductService {
   }
 
   /**
+   * Borrado lógico (soft delete): desactiva el producto en el ERP y, si está vinculado a WooCommerce,
+   * lo mueve a la papelera de WooCommerce (no se borra definitivamente en la tienda).
+   */
+  async deleteProduct(id: number): Promise<{ id: number; name: string }> {
+    const product = await this.productRepository.findById(id);
+    if (!product) {
+      throw new Error('Producto no encontrado');
+    }
+    await this.productRepository.update(id, { is_active: false });
+    if (product.woocommerce_id && this.wooCommerceService.isConfigured()) {
+      try {
+        await this.wooCommerceService.deleteProduct(product.woocommerce_id, false); // false = papelera
+        logger.product.sync(`Producto id=${id}: enviado a la papelera de WooCommerce (wc_id=${product.woocommerce_id}).`);
+      } catch (error) {
+        logger.product.error('Error enviando producto a la papelera de WooCommerce:', error);
+        // No relanzamos: el producto ya está desactivado en el ERP; el admin puede sincronizar manualmente si hace falta
+      }
+    }
+    return { id: product.id, name: product.name };
+  }
+
+  /**
+   * Borrado permanente: elimina el producto del ERP y, si está vinculado a WooCommerce,
+   * lo borra definitivamente en la tienda (no solo de la papelera).
+   */
+  async deleteProductPermanently(id: number): Promise<{ id: number; name: string }> {
+    const product = await this.productRepository.findById(id);
+    if (!product) {
+      throw new Error('Producto no encontrado');
+    }
+    if (product.woocommerce_id && this.wooCommerceService.isConfigured()) {
+      try {
+        await this.wooCommerceService.deleteProduct(product.woocommerce_id, true); // true = borrado definitivo
+        logger.product.sync(`Producto id=${id}: borrado permanentemente en WooCommerce (wc_id=${product.woocommerce_id}).`);
+      } catch (error) {
+        logger.product.error('Error borrando producto en WooCommerce (permanente):', error);
+        // Opcional: relanzar para que el usuario sepa que falló en WC
+      }
+    }
+    await this.productRepository.deleteById(id);
+    return { id: product.id, name: product.name };
+  }
+
+  /**
    * Sincroniza un producto del ERP a WooCommerce (crear o actualizar).
    * Si el producto tiene woocommerce_id, actualiza en WC; si no, crea en WC y guarda el id en el ERP.
    */

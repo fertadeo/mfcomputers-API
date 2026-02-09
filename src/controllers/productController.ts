@@ -458,87 +458,53 @@ export class ProductController {
     }
   }
 
-  // DELETE /api/products/:id - Delete product (soft delete)
+  // DELETE /api/products/:id - Delete product (soft delete). En el ERP se desactiva; en WooCommerce se mueve a la papelera.
   public async deleteProduct(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      
-      // Check if product exists
-      const existingProductResult = await executeQuery('SELECT id, name FROM products WHERE id = ?', [id]);
-      const existingProduct = existingProductResult[0];
-      if (!existingProduct) {
-        const response: ApiResponse = {
-          success: false,
-          message: 'Product not found',
-          timestamp: new Date().toISOString()
-        };
-        res.status(404).json(response);
-        return;
-      }
-      
-      // Soft delete - set is_active to 0 instead of actually deleting
-      const deleteQuery = 'UPDATE products SET is_active = 0, updated_at = NOW() WHERE id = ?';
-      await executeQuery(deleteQuery, [id]);
-      
+      const deleted = await this.productService.deleteProduct(Number(id));
       const response: ApiResponse = {
         success: true,
-        message: `Product "${existingProduct.name}" deleted successfully`,
-        data: { id: Number(id), name: existingProduct.name },
+        message: `Producto "${deleted.name}" eliminado correctamente. En WooCommerce se ha enviado a la papelera si estaba vinculado.`,
+        data: { id: deleted.id, name: deleted.name },
         timestamp: new Date().toISOString()
       };
-      
       res.status(200).json(response);
     } catch (error) {
       console.error('Delete product error:', error);
+      const isNotFound = error instanceof Error && error.message.includes('no encontrado');
       const response: ApiResponse = {
         success: false,
-        message: 'Error deleting product',
+        message: isNotFound ? 'Product not found' : 'Error deleting product',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       };
-      res.status(500).json(response);
+      res.status(isNotFound ? 404 : 500).json(response);
     }
   }
 
-  // DELETE /api/products/:id/permanent - Permanently delete product
+  // DELETE /api/products/:id/permanent - Permanently delete product (ERP y WooCommerce).
   public async permanentDeleteProduct(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      
-      // Check if product exists
-      const existingProductResult = await executeQuery('SELECT id, name FROM products WHERE id = ?', [id]);
-      const existingProduct = existingProductResult[0];
-      if (!existingProduct) {
-        const response: ApiResponse = {
-          success: false,
-          message: 'Product not found',
-          timestamp: new Date().toISOString()
-        };
-        res.status(404).json(response);
-        return;
-      }
-      
-      // Permanently delete the product
-      const deleteQuery = 'DELETE FROM products WHERE id = ?';
-      await executeQuery(deleteQuery, [id]);
-      
+      const deleted = await this.productService.deleteProductPermanently(Number(id));
       const response: ApiResponse = {
         success: true,
-        message: `Product "${existingProduct.name}" permanently deleted`,
-        data: { id: Number(id), name: existingProduct.name },
+        message: `Producto "${deleted.name}" eliminado permanentemente (ERP y WooCommerce si estaba vinculado).`,
+        data: { id: deleted.id, name: deleted.name },
         timestamp: new Date().toISOString()
       };
-      
       res.status(200).json(response);
     } catch (error) {
       console.error('Permanent delete product error:', error);
+      const isNotFound = error instanceof Error && error.message.includes('no encontrado');
       const response: ApiResponse = {
         success: false,
-        message: 'Error permanently deleting product',
+        message: isNotFound ? 'Product not found' : 'Error permanently deleting product',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       };
-      res.status(500).json(response);
+      res.status(isNotFound ? 404 : 500).json(response);
     }
   }
 }
