@@ -155,8 +155,8 @@ export class ProductService {
     }
 
     const stock = product.stock ?? 0;
-    // Si tenemos IDs de medios de WordPress, usarlos (evita duplicados en galería); si no, usar URLs.
-    // Filtrar URLs vacías e IDs inválidos para evitar "No URL Provided" de WooCommerce.
+    // Combinar IDs de medios (archivos subidos) y URLs (externas o de subida): WooCommerce acepta ambos en el mismo array.
+    // Así se reflejan en WooCommerce tanto las imágenes por archivo como las añadidas por URL (ej. cdn.smart-gsm.com).
     const woocommerceImageIds = (product as any).woocommerce_image_ids as number[] | undefined;
     const validIds = Array.isArray(woocommerceImageIds)
       ? woocommerceImageIds.filter((id: number) => typeof id === 'number' && id > 0)
@@ -164,17 +164,19 @@ export class ProductService {
     const validUrls = Array.isArray(product.images)
       ? product.images.filter((url: string) => typeof url === 'string' && url.trim().length > 0)
       : [];
+    const byId = validIds.map((id: number) => ({ id }));
+    const bySrc = validUrls.map((url: string) => ({ src: url }));
     const imagesPayload =
-      validIds.length > 0
-        ? validIds.map((id: number) => ({ id }))
-        : validUrls.length > 0
-          ? validUrls.map((url: string) => ({ src: url }))
-          : undefined;
+      byId.length > 0 || bySrc.length > 0
+        ? [...byId, ...bySrc]
+        : undefined;
 
-    if (validIds.length > 0) {
-      logger.product.sync(`Producto id=${productId}: enviando a WooCommerce ${validIds.length} imagen(es) por ID de medio.`, validIds);
-    } else if (validUrls.length > 0) {
-      logger.product.sync(`Producto id=${productId}: enviando a WooCommerce ${validUrls.length} imagen(es) por URL.`, validUrls.slice(0, 3).concat(validUrls.length > 3 ? ['...'] : []));
+    if (validIds.length > 0 || validUrls.length > 0) {
+      logger.product.sync(
+        `Producto id=${productId}: enviando a WooCommerce ${validIds.length} imagen(es) por ID y ${validUrls.length} por URL.`,
+        validIds.length > 0 ? validIds : undefined,
+        validUrls.length > 0 ? validUrls.slice(0, 3).concat(validUrls.length > 3 ? ['...'] : []) : undefined
+      );
     } else {
       logger.product.sync(`Producto id=${productId}: sin imágenes en payload (galería vacía o sin datos).`);
     }

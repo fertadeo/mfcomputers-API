@@ -9,6 +9,7 @@ Indicaciones para que el frontend envíe y verifique correctamente los datos de 
 - **`images`** se interpreta como **lista final** (reemplazo), no como “agregar a las existentes”.
 - Si el usuario **borra todas** las imágenes y **agrega una** (por URL o archivo), el front debe enviar **solo esa imagen** en `images`.
 - La API limpia `woocommerce_image_ids` cuando se actualiza `images`, para que el próximo Sync WooCommerce use las URLs y actualice la galería en WooCommerce.
+- **Sync WooCommerce:** se envían **tanto** los IDs de medios (archivos subidos) **como** las URLs (externas, ej. cdn.smart-gsm.com). Si cargas archivo y URL a la vez, ambos se reflejan en WooCommerce. Si solo quieres la URL, envía en `images` solo esa URL (la API limpiará los IDs y en el sync solo irá la URL).
 
 ---
 
@@ -122,3 +123,10 @@ Si lo que envía el front no coincide con lo esperado, esos logs ayudan a ver qu
 - **Sync WooCommerce:** POST a sync-to-woocommerce; la API usa las `images` guardadas (y limpia `woocommerce_image_ids` al actualizar imágenes).
 
 Si algo no coincide (por ejemplo, reaparecen imágenes borradas o el Sync no actualiza), revisar que el body del PUT tenga el array `images` correcto en la pestaña Network.
+
+---
+
+## 6. Problema: "Solo veo el archivo" o "Al editar con URL no se refleja en WooCommerce"
+
+- **Causa:** Si el producto tenía una imagen por archivo (subida) y luego añades o cambias a una imagen por URL, el frontend debe enviar en **PUT /api/products/:id** el campo **`images`** con la **lista final** de URLs que quieres que tenga el producto (incluyendo la URL nueva). Si no envías `images`, la API no actualiza la galería y el próximo Sync seguirá usando solo los IDs del archivo.
+- **Solución:** Al guardar desde el modal de imágenes (ya sea tras añadir una URL, borrar una, o combinar archivo + URL), enviar siempre **`images`** como array de strings con **todas** las URLs que deben quedar. Para "solo la URL externa", enviar `images: ["https://cdn.smart-gsm.com/..."]`. Para "archivo + URL", enviar `images: [urlDelArchivoSubido, "https://..."]` (la URL del archivo es la `source_url` que devuelve POST /api/woocommerce/media).
