@@ -42,8 +42,8 @@ app.use(cors({
       console.log(`✅ CORS - Origen permitido: ${origin}`);
       callback(null, true);
     } else {
-      console.warn(`❌ CORS - Origen bloqueado: ${origin}`);
-      console.warn(`   Orígenes permitidos: ${allowedOrigins.join(', ')}`);
+      console.error(`❌ CORS - Origen bloqueado: ${origin}`);
+      console.error(`   Orígenes permitidos: ${allowedOrigins.join(', ')}`);
       callback(new Error('No permitido por CORS'));
     }
   },

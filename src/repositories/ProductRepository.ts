@@ -176,6 +176,32 @@ export class ProductRepository {
   }
 
   // Obtener producto por código
+  async findByBarcode(barcode: string): Promise<ProductWithCategory | null> {
+    const query = `
+      SELECT 
+        p.*,
+        c.name as category_name
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.barcode = ?
+      AND p.is_active = 1
+      LIMIT 1
+    `;
+    
+    const results = await executeQuery(query, [barcode]) as any[];
+    
+    if (!Array.isArray(results) || results.length === 0) {
+      return null;
+    }
+
+    const row = results[0];
+    return {
+      ...row,
+      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
+      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null
+    };
+  }
+
   async findByCode(code: string): Promise<Product | null> {
     const query = 'SELECT * FROM products WHERE code = ?';
     const product = await executeQuery(query, [code]);

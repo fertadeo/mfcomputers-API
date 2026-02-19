@@ -303,7 +303,7 @@ export class CategoryController {
       });
       
       if (result.errors.length > 0) {
-        console.warn(`[${requestId}] ⚠️ Errores durante la sincronización:`, result.errors);
+        console.error(`[${requestId}] ⚠️ Errores durante la sincronización:`, result.errors);
       }
       
       let message = `Sincronización completada. ${result.created} creadas, ${result.updated} actualizadas`;

@@ -114,4 +114,57 @@ router.put('/:id/stock',
   productController.updateStock.bind(productController)
 );
 
+// Barcode lookup endpoints
+const barcodeValidation = [
+  param('code').notEmpty().withMessage('Código de barras es requerido')
+];
+
+const acceptBarcodeValidation = [
+  param('code').notEmpty().withMessage('Código de barras es requerido'),
+  body('category_id').optional().isInt().withMessage('category_id debe ser un número entero'),
+  body('price').optional().isNumeric().withMessage('price debe ser numérico'),
+  body('stock').optional().isInt({ min: 0 }).withMessage('stock debe ser un número entero positivo'),
+  body('code').optional().isString().withMessage('code debe ser texto')
+];
+
+const createFromBarcodeValidation = [
+  param('code').notEmpty().withMessage('Código de barras es requerido'),
+  body('code').notEmpty().withMessage('Código interno es requerido'),
+  body('name').notEmpty().withMessage('Nombre es requerido'),
+  body('price').isNumeric().withMessage('Precio debe ser numérico'),
+  body('barcode').optional().isString().withMessage('Barcode debe ser texto'),
+  body('description').optional({ nullable: true }).isString().withMessage('Descripción debe ser texto'),
+  body('category_id').optional({ nullable: true }).isInt().withMessage('Categoría debe ser un número entero'),
+  body('stock').optional().isInt({ min: 0 }).withMessage('Stock debe ser un número entero positivo'),
+  body('images').optional({ nullable: true }).isArray().withMessage('Imágenes debe ser un array')
+];
+
+// GET /api/products/barcode/:code - Buscar por código de barras
+router.get('/barcode/:code',
+  authorizeRoles('gerencia', 'ventas', 'logistica', 'finanzas'),
+  validate(barcodeValidation),
+  productController.getProductByBarcode.bind(productController)
+);
+
+// POST /api/products/barcode/:code/accept - Aceptar datos y crear producto
+router.post('/barcode/:code/accept',
+  authorizeRoles('gerencia'),
+  validate(acceptBarcodeValidation),
+  productController.acceptBarcodeData.bind(productController)
+);
+
+// POST /api/products/barcode/:code/create - Modificar datos y crear producto
+router.post('/barcode/:code/create',
+  authorizeRoles('gerencia'),
+  validate(createFromBarcodeValidation),
+  productController.createProductFromBarcode.bind(productController)
+);
+
+// POST /api/products/barcode/:code/ignore - Ignorar datos encontrados
+router.post('/barcode/:code/ignore',
+  authorizeRoles('gerencia', 'ventas', 'logistica', 'finanzas'),
+  validate(barcodeValidation),
+  productController.ignoreBarcodeData.bind(productController)
+);
+
 export default router;

@@ -3,12 +3,15 @@ import { executeQuery } from '../config/database';
 import { ApiResponse, Product } from '../types';
 import { validationResult } from 'express-validator';
 import { ProductService } from '../services/ProductService';
+import { BarcodeLookupService } from '../services/BarcodeLookupService';
 
 export class ProductController {
   private productService: ProductService;
+  private barcodeLookupService: BarcodeLookupService;
 
   constructor() {
     this.productService = new ProductService();
+    this.barcodeLookupService = new BarcodeLookupService();
   }
 
   // GET /api/products - Get all products with pagination and filters
@@ -505,6 +508,223 @@ export class ProductController {
         timestamp: new Date().toISOString()
       };
       res.status(isNotFound ? 404 : 500).json(response);
+    }
+  }
+
+  // GET /api/products/barcode/:code - Buscar producto por código de barras
+  public async getProductByBarcode(req: Request, res: Response): Promise<void> {
+    try {
+      const { code } = req.params;
+      
+      if (!code) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Código de barras es requerido',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const lookupResult = await this.barcodeLookupService.lookupBarcode(code);
+      
+      if (!lookupResult) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'No se encontraron datos para este código de barras',
+          timestamp: new Date().toISOString()
+        };
+        res.status(404).json(response);
+        return;
+      }
+
+      const response: ApiResponse<any> = {
+        success: true,
+        message: 'Datos encontrados exitosamente',
+        data: lookupResult,
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Get product by barcode error:', error);
+      const isInvalidFormat = error instanceof Error && error.message.includes('inválido');
+      const response: ApiResponse = {
+        success: false,
+        message: isInvalidFormat ? 'Formato de código de barras inválido' : 'Error buscando producto por código de barras',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(isInvalidFormat ? 400 : 500).json(response);
+    }
+  }
+
+  // POST /api/products/barcode/:code/accept - Aceptar datos y crear producto
+  public async acceptBarcodeData(req: Request, res: Response): Promise<void> {
+    try {
+      const { code } = req.params;
+      const { category_id, price, stock, code: productCode } = req.body;
+
+      if (!code) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Código de barras es requerido',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const product = await this.barcodeLookupService.acceptBarcodeData(code, {
+        category_id: category_id ? Number(category_id) : undefined,
+        price: price ? Number(price) : undefined,
+        stock: stock ? Number(stock) : undefined,
+        code: productCode
+      });
+
+      const response: ApiResponse<Product> = {
+        success: true,
+        message: 'Producto creado exitosamente',
+        data: product,
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Accept barcode data error:', error);
+      const isNotFound = error instanceof Error && error.message.includes('No se encontraron');
+      const isDuplicate = error instanceof Error && error.message.includes('ya existe');
+      
+      const response: ApiResponse = {
+        success: false,
+        message: isNotFound 
+          ? 'No se encontraron datos para este código de barras' 
+          : isDuplicate
+          ? 'El código del producto ya existe'
+          : 'Error al crear producto',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      
+      res.status(isNotFound ? 404 : isDuplicate ? 400 : 500).json(response);
+    }
+  }
+
+  // POST /api/products/barcode/:code/create - Modificar datos y crear producto
+  public async createProductFromBarcode(req: Request, res: Response): Promise<void> {
+    try {
+      const { code } = req.params;
+      const productData = req.body;
+
+      if (!code) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Código de barras es requerido',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      // Validar que el barcode en el body coincida con el parámetro
+      if (productData.barcode && productData.barcode.replace(/[\s-]/g, '') !== code.replace(/[\s-]/g, '')) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'El código de barras en el body no coincide con el parámetro de la URL',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      // Verificar que existan datos en cache para este barcode
+      const lookupResult = await this.barcodeLookupService.lookupBarcode(code);
+      if (!lookupResult || lookupResult.exists_as_product) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'No se encontraron datos para este código de barras. Debe buscar primero.',
+          timestamp: new Date().toISOString()
+        };
+        res.status(404).json(response);
+        return;
+      }
+
+      // Crear producto con datos modificados usando ProductService
+      const product = await this.productService.createProduct({
+        code: productData.code,
+        name: productData.name || lookupResult.title,
+        description: productData.description || lookupResult.description || null,
+        category_id: productData.category_id || null,
+        price: productData.price || lookupResult.suggested_price || 0,
+        stock: productData.stock || 0,
+        min_stock: productData.min_stock || 0,
+        max_stock: productData.max_stock || 1000,
+        barcode: code.replace(/[\s-]/g, ''),
+        images: productData.images || lookupResult.images || null
+      }, false);
+
+      const response: ApiResponse<Product> = {
+        success: true,
+        message: 'Producto creado exitosamente',
+        data: product,
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Create product from barcode error:', error);
+      const isDuplicate = error instanceof Error && error.message.includes('ya existe');
+      const isNotFound = error instanceof Error && error.message.includes('no encontrado');
+      
+      const response: ApiResponse = {
+        success: false,
+        message: isDuplicate 
+          ? 'El código del producto ya existe'
+          : isNotFound
+          ? 'No se encontraron datos para este código de barras'
+          : 'Error al crear producto',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      
+      res.status(isDuplicate || isNotFound ? 400 : 500).json(response);
+    }
+  }
+
+  // POST /api/products/barcode/:code/ignore - Ignorar datos encontrados
+  public async ignoreBarcodeData(req: Request, res: Response): Promise<void> {
+    try {
+      const { code } = req.params;
+      const userId = (req as any).user?.id; // Obtener ID del usuario desde JWT
+
+      if (!code) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Código de barras es requerido',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      await this.barcodeLookupService.ignoreBarcodeData(code, userId);
+
+      const response: ApiResponse = {
+        success: true,
+        message: 'Datos descartados exitosamente',
+        timestamp: new Date().toISOString()
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Ignore barcode data error:', error);
+      const response: ApiResponse = {
+        success: false,
+        message: 'Error al descartar datos',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(500).json(response);
     }
   }
 }
