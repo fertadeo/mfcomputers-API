@@ -2,7 +2,7 @@ import chalk from 'chalk';
 
 /**
  * Logger con colores por tipo de acción para facilitar la visualización en consola.
- * Uso: logger.product.info(), logger.product.warn(), etc.
+ * Uso: logger.product.info(), logger.barcode.search(), etc.
  */
 const product = {
   /** Acciones de actualización (ej. reemplazo de imágenes, guardado) */
@@ -22,6 +22,26 @@ const product = {
     console.log(chalk.cyan('[ProductService]'), chalk.gray('INFO:'), msg, ...args),
 };
 
+/** Logger para búsqueda por código de barras (flujo completo y providers) */
+const barcode = {
+  /** Inicio de búsqueda, paso actual */
+  search: (msg: string, ...args: unknown[]) =>
+    console.log(chalk.yellow('[BarcodeLookup]'), chalk.cyan('SEARCH:'), msg, ...args),
+  /** Provider externo (Google, UPC, etc.) */
+  provider: (msg: string, ...args: unknown[]) =>
+    console.log(chalk.yellow('[BarcodeLookup]'), chalk.magenta('PROVIDER:'), msg, ...args),
+  /** Resultado encontrado */
+  found: (msg: string, ...args: unknown[]) =>
+    console.log(chalk.yellow('[BarcodeLookup]'), chalk.green('FOUND:'), msg, ...args),
+  /** No encontrado / skip */
+  skip: (msg: string, ...args: unknown[]) =>
+    console.log(chalk.yellow('[BarcodeLookup]'), chalk.gray('SKIP:'), msg, ...args),
+  /** Errores en el flujo de barcode */
+  error: (msg: string, ...args: unknown[]) =>
+    console.error(chalk.yellow('[BarcodeLookup]'), chalk.red('ERROR:'), msg, ...args),
+};
+
 export const logger = {
   product,
+  barcode,
 };

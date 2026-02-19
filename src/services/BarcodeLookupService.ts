@@ -22,16 +22,21 @@ export class BarcodeLookupService {
    * Prioriza: products existentes → cache → providers externos
    */
   async lookupBarcode(barcode: string): Promise<BarcodeLookupResponse | null> {
+    const cleanedBarcode = barcode.replace(/[\s-]/g, '');
+
+    logger.barcode.search(`Inicio búsqueda barcode="${cleanedBarcode}"`);
+
     // Validar formato
     if (!validateBarcode(barcode)) {
+      logger.barcode.error(`Barcode inválido: "${cleanedBarcode}"`);
       throw new Error('Formato de código de barras inválido');
     }
 
-    const cleanedBarcode = barcode.replace(/[\s-]/g, '');
-
     // Paso 1: Buscar en productos existentes
+    logger.barcode.search(`Paso 1: Buscando en tabla products...`);
     const existingProduct = await this.productRepository.findByBarcode(cleanedBarcode);
     if (existingProduct) {
+      logger.barcode.found(`Producto ya existe en sistema (id=${existingProduct.id}): ${existingProduct.name}`);
       return {
         title: existingProduct.name,
         description: existingProduct.description || undefined,
@@ -48,11 +53,13 @@ export class BarcodeLookupService {
         }
       };
     }
+    logger.barcode.skip(`Paso 1: No encontrado en products`);
 
     // Paso 2: Buscar en cache
+    logger.barcode.search(`Paso 2: Buscando en barcode_lookup_cache...`);
     const cachedResult = await this.cacheRepository.findByBarcode(cleanedBarcode);
     if (cachedResult && !cachedResult.ignored) {
-      // Actualizar uso
+      logger.barcode.found(`Encontrado en cache (source=${cachedResult.source}): ${cachedResult.title}`);
       await this.cacheRepository.updateUsage(cleanedBarcode);
 
       return {
@@ -73,10 +80,17 @@ export class BarcodeLookupService {
         }
       };
     }
+    if (cachedResult?.ignored) {
+      logger.barcode.skip(`Paso 2: En cache pero marcado como ignorado`);
+    } else {
+      logger.barcode.skip(`Paso 2: No encontrado en cache`);
+    }
 
     // Paso 3: Consultar providers externos
+    logger.barcode.search(`Paso 3: Consultando providers externos (UPCItemDB, Discogs, Google, Tienda)...`);
     const providerResult = await resolveProduct(cleanedBarcode);
     if (providerResult) {
+      logger.barcode.found(`Provider "${providerResult.source}" encontró: ${providerResult.title}`);
       // Extraer solo los datos originales del provider (sin provider_response_time)
       const { provider_response_time, ...providerData } = providerResult;
       
@@ -108,7 +122,7 @@ export class BarcodeLookupService {
       };
     }
 
-    // No se encontró en ningún lugar
+    logger.barcode.skip(`Paso 3: Ningún provider encontró resultados para barcode="${cleanedBarcode}"`);
     return null;
   }
 

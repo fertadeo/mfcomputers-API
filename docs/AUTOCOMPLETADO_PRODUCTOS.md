@@ -959,6 +959,73 @@ Esta sección contiene toda la información necesaria para que el equipo de fron
 
 ---
 
+### 🔍 Uso del buscador de código de barras (incluye Google)
+
+**Importante para el frontend:** El frontend **no llama nunca** a la API de Google. Solo se usa **un único endpoint** de nuestra API:
+
+```
+GET /api/products/barcode/:code
+```
+
+La API backend consulta en este orden:
+1. Productos ya cargados en el sistema  
+2. Cache interno  
+3. Bases externas (UPCItemDB, Discogs)  
+4. **Búsqueda web (Google Custom Search)** — si está configurado en el backend  
+
+Todo eso es transparente: el frontend envía el código y recibe una sola respuesta. No hace falta lógica distinta para “usar Google”.
+
+**Qué hacer en el frontend:**
+- Seguir usando solo `GET /api/products/barcode/:code` con el código escaneado o ingresado.
+- Leer `data.source` en la respuesta para mostrar de dónde vino el dato (opcional).
+- Mostrar `data.preview_message` y el resto de campos como hasta ahora.
+
+**Valores posibles de `data.source`:**
+- `"products"` — El producto ya existe en nuestro sistema.
+- `"cache"` — Dato obtenido del cache (búsqueda anterior).
+- `"upcitemdb"` — Base de datos UPC.
+- `"discogs"` — Base Discogs (música).
+- `"google"` — **Encontrado vía búsqueda web (Google).** Podés mostrar un texto tipo: *"Encontrado vía búsqueda web"* o *"Datos obtenidos de búsqueda en internet"*.
+
+**Ejemplo de UI según `source`:**
+```ts
+const sourceLabels: Record<string, string> = {
+  products: 'Producto en el sistema',
+  cache: 'Datos en caché',
+  upcitemdb: 'Base de datos de productos',
+  discogs: 'Base de datos de música',
+  google: 'Encontrado vía búsqueda web'
+};
+
+const label = sourceLabels[data.source] ?? 'Datos encontrados';
+// Mostrar junto al preview: "Fuente: Encontrado vía búsqueda web"
+```
+
+**Resumen:** Mismo flujo de siempre (un request al buscador de código de barras). La API ya integra Google en el backend; el frontend solo consume la respuesta y puede usar `source` para etiquetar el origen si lo desea.
+
+---
+
+### ⏱️ ¿En qué momento entra Google en la búsqueda?
+
+Cuando usás el buscador de código de barras, la API sigue siempre el mismo flujo. **Google solo se usa si se llega al Paso 3 y los otros proveedores no devuelven resultado.**
+
+| Paso | Qué hace la API | ¿Se llama a Google? |
+|------|----------------------------------|----------------------|
+| **1** | Busca el código en la tabla **productos** (productos ya cargados en el sistema). | ❌ No. Si encuentra, responde y termina. |
+| **2** | Busca el código en la **cache** (búsquedas anteriores). | ❌ No. Si encuentra, responde y termina. |
+| **3** | Si no encontró en 1 ni 2, consulta **proveedores externos** (UPCItemDB, Discogs, **Google**, Tienda) **en paralelo**. | ✅ Sí. Google se llama aquí, junto con el resto. |
+| **Resultado** | De los que contestan con datos, se toma **uno** (prioridad: UPCItemDB → Discogs → Google → Tienda). Ese resultado se guarda en cache y se devuelve. | El resultado que ves puede ser de Google si los otros no encontraron nada. |
+
+**En la práctica:**
+
+- **Código ya cargado en el sistema** → Respuesta en Paso 1. Google no se usa.
+- **Código buscado antes** (está en cache) → Respuesta en Paso 2. Google no se usa.
+- **Código nuevo** que no está en productos ni en cache → Se ejecuta Paso 3: se consultan todos los proveedores (incluido Google). Si UPCItemDB o Discogs encuentran algo, se usa ese; si no, se usa el de Google (o el de Tienda) si devuelve resultado.
+
+Por tanto: **Google entra a funcionar solo cuando la búsqueda llega al Paso 3** (ni el producto existe en tu base ni en cache) y, dentro de ese paso, su resultado se usa si los proveedores con mayor prioridad no devolvieron datos.
+
+---
+
 ### 🔗 Endpoints Disponibles
 
 #### Base URL

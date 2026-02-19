@@ -11,7 +11,6 @@ export const upcProvider: ProductProvider = {
   
   async search(barcode: string): Promise<ProductResult | null> {
     try {
-      // Validar que el código tenga formato válido
       const cleanedBarcode = barcode.replace(/[\s-]/g, '');
       if (!/^\d+$/.test(cleanedBarcode) || cleanedBarcode.length < 8) {
         return null;
@@ -44,8 +43,7 @@ export const upcProvider: ProductProvider = {
 
       return null;
     } catch (error: any) {
-      // Log error pero no lanzar excepción
-      logger.product.error(`Error en upcProvider para barcode ${barcode}:`, error.message);
+      logger.barcode.provider(`upcitemdb: error → ${error.message}`);
       return null;
     }
   }

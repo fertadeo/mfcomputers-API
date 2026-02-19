@@ -106,20 +106,23 @@ export const googleProvider: ProductProvider = {
   name: 'google',
   
   async search(barcode: string): Promise<ProductResult | null> {
+    const start = Date.now();
     try {
       const apiKey = process.env.GOOGLE_API_KEY;
       const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
-      
-      // Si no está configurado, retornar null silenciosamente
+
       if (!apiKey || !searchEngineId) {
+        logger.barcode.provider(`google: omitido (GOOGLE_API_KEY o GOOGLE_SEARCH_ENGINE_ID no configurados)`);
         return null;
       }
 
       const cleanedBarcode = barcode.replace(/[\s-]/g, '');
       if (!/^\d+$/.test(cleanedBarcode)) {
+        logger.barcode.provider(`google: barcode inválido, skip`);
         return null;
       }
 
+      logger.barcode.provider(`google: llamando Custom Search API q="${cleanedBarcode}"`);
       // Buscar en Google Custom Search
       // Incluimos "site:google.com/shopping" para priorizar resultados de Google Shopping
       const response = await axios.get(
@@ -175,6 +178,7 @@ export const googleProvider: ProductProvider = {
 
         const category = extractCategoryFromLink(bestResult.link || '');
 
+        logger.barcode.provider(`google: encontrado → "${cleanTitle(bestResult.title || '')}" (${Date.now() - start}ms)`);
         return {
           title: cleanTitle(bestResult.title || 'Producto encontrado'),
           description: bestResult.snippet || undefined,
@@ -186,15 +190,16 @@ export const googleProvider: ProductProvider = {
         };
       }
 
+      logger.barcode.provider(`google: sin resultados (${Date.now() - start}ms)`);
       return null;
     } catch (error: any) {
-      // Log error pero no lanzar excepción
+      const ms = Date.now() - start;
       if (error.response?.status === 429) {
-        logger.product.info(`Google Custom Search rate limit alcanzado para barcode ${barcode}`);
+        logger.barcode.provider(`google: rate limit (429) barcode=${barcode} ${ms}ms`);
       } else if (error.response?.status === 403) {
-        logger.product.info(`Google Custom Search API key inválida o sin permisos para barcode ${barcode}`);
+        logger.barcode.provider(`google: API key inválida o sin permisos (403) ${ms}ms`);
       } else {
-        logger.product.info(`Error en googleProvider para barcode ${barcode}:`, error.message);
+        logger.barcode.provider(`google: error → ${error.message} (${ms}ms)`);
       }
       return null;
     }

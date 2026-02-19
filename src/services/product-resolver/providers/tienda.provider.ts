@@ -26,7 +26,7 @@ export const tiendaProvider: ProductProvider = {
       
       return null;
     } catch (error: any) {
-      logger.product.error(`Error en tiendaProvider para barcode ${barcode}:`, error.message);
+      logger.barcode.provider(`tienda: error → ${error.message}`);
       return null;
     }
   }

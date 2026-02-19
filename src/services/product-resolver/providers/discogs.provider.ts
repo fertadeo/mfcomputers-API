@@ -18,7 +18,8 @@ export const discogsProvider: ProductProvider = {
       const apiSecret = process.env.DISCOGS_API_SECRET;
       
       if (!apiKey || !apiSecret) {
-        return null; // Silenciosamente retornar null si no está configurado
+        logger.barcode.provider(`discogs: omitido (API key no configurada)`);
+        return null;
       }
 
       const cleanedBarcode = barcode.replace(/[\s-]/g, '');
@@ -56,7 +57,7 @@ export const discogsProvider: ProductProvider = {
 
       return null;
     } catch (error: any) {
-      logger.product.error(`Error en discogsProvider para barcode ${barcode}:`, error.message);
+      logger.barcode.provider(`discogs: error → ${error.message}`);
       return null;
     }
   }

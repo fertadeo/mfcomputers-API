@@ -2,6 +2,12 @@
 
 Esta guía explica cómo configurar Google Custom Search API para mejorar la cobertura de búsqueda de productos por código de barras.
 
+---
+
+**Para el equipo de frontend:** No tenés que integrar Google ni usar otra API. Seguís usando el mismo endpoint de código de barras: `GET /api/products/barcode/:code`. La API backend usa Google por detrás cuando los otros proveedores no encuentran resultados. Si querés mostrar el origen del dato, usá el campo `data.source` de la respuesta; cuando sea `"google"` podés mostrar *"Encontrado vía búsqueda web"*. Detalles en la sección **"Uso del buscador de código de barras (incluye Google)"** de `docs/AUTOCOMPLETADO_PRODUCTOS.md`.
+
+---
+
 ## ⚠️ Cambio Importante de Google
 
 **Google ha deshabilitado la función "Buscar en toda la Web"** en Custom Search Engine. Ahora es **obligatorio** especificar sitios específicos donde buscar.
@@ -141,8 +147,28 @@ Integrar Google Custom Search API para encontrar productos que no están en las 
 
 ## ⚙️ Paso 5: Configurar Variables de Entorno
 
-Agrega las siguientes variables a tu archivo `.env`:
+### ¿Dónde van las variables?
 
+**✅ En la API (backend)** — Las claves van **solo en el servidor de la API**, no en el frontend.
+
+| Dónde | ¿Agregar las variables? |
+|-------|---------------------------|
+| **API** (`.env` del proyecto mfcomputers-API) | ✅ **SÍ** — Aquí es donde se usan |
+| **Vercel / Frontend** (variables de entorno del sitio web) | ❌ **NO** — Nunca expongas estas claves en el cliente |
+
+**Motivo:** El provider de Google Custom Search corre en el backend (`src/services/product-resolver/providers/google.provider.ts`). El frontend solo llama a `GET /api/products/barcode/:code`; quien llama a Google es la API. Si pusieras las claves en el frontend, quedarían expuestas en el navegador y cualquiera podría usarlas.
+
+**Resumen:**
+- **Desarrollo:** archivo `.env` en la raíz del proyecto de la **API** (mfcomputers-API)
+- **Producción:** variables de entorno del **servicio donde corre la API** (Vercel Serverless, Railway, Render, etc.), no del proyecto frontend en Vercel
+
+---
+
+### Variables a configurar
+
+En el **proyecto de la API** (no en el frontend), agrega:
+
+**Archivo `.env` (desarrollo local):**
 ```env
 # Google Custom Search API
 GOOGLE_API_KEY=tu_api_key_aqui
@@ -154,6 +180,8 @@ GOOGLE_SEARCH_ENGINE_ID=tu_search_engine_id_aqui
 GOOGLE_API_KEY=AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GOOGLE_SEARCH_ENGINE_ID=012345678901234567890:abcdefghijk
 ```
+
+**Si desplegás la API en Vercel:** agregá estas mismas variables en **Project Settings > Environment Variables** del **proyecto de la API** en Vercel, no del proyecto del frontend.
 
 ---
 

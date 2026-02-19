@@ -29,18 +29,35 @@ const providers: ProductProvider[] = [
  */
 export async function resolveProduct(barcode: string): Promise<ProductResult | null> {
   const startTime = Date.now();
-  
+
+  logger.barcode.provider(`Iniciando ${providers.length} providers en paralelo: ${providers.map(p => p.name).join(', ')}`);
+
   try {
-    // Ejecutar todos los providers en paralelo
     const results = await Promise.allSettled(
       providers.map(provider => provider.search(barcode))
     );
 
-    // Tomar el primer resultado exitoso
+    // Log resultado de cada provider
+    for (let i = 0; i < results.length; i++) {
+      const name = providers[i].name;
+      const result = results[i];
+      if (result.status === 'fulfilled') {
+        if (result.value) {
+          logger.barcode.provider(`${name}: OK → "${result.value.title}"`);
+        } else {
+          logger.barcode.provider(`${name}: sin resultados`);
+        }
+      } else {
+        logger.barcode.provider(`${name}: error → ${(result.reason as Error)?.message || result.reason}`);
+      }
+    }
+
+    // Tomar el primer resultado exitoso (prioridad por orden del array)
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.status === 'fulfilled' && result.value) {
         const responseTime = Date.now() - startTime;
+        logger.barcode.provider(`Usando resultado de ${providers[i].name} (${responseTime}ms total)`);
         logger.product.info(`Producto resuelto por ${providers[i].name} en ${responseTime}ms`);
         return {
           ...result.value,
@@ -49,11 +66,12 @@ export async function resolveProduct(barcode: string): Promise<ProductResult | n
       }
     }
 
-    // Si ningún provider encontró resultados
     const totalTime = Date.now() - startTime;
+    logger.barcode.provider(`Todos los providers terminaron sin resultado (${totalTime}ms)`);
     logger.product.info(`No se encontró producto para barcode ${barcode} después de ${totalTime}ms`);
     return null;
   } catch (error: any) {
+    logger.barcode.error(`resolveProduct barcode=${barcode}:`, error?.message || error);
     logger.product.error(`Error crítico en resolveProduct para barcode ${barcode}:`, error);
     return null;
   }
