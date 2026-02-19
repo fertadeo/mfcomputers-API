@@ -89,18 +89,20 @@ function extractCategoryFromLink(link: string): string | null {
 }
 
 /**
- * Provider para Google Custom Search API
- * Permite buscar productos en Google Shopping y resultados web
- * 
- * Setup requerido:
- * 1. Crear proyecto en Google Cloud Console
- * 2. Habilitar Custom Search API
- * 3. Crear Custom Search Engine en https://programmablesearchengine.google.com/
- * 4. Configurar variables de entorno:
- *    - GOOGLE_API_KEY=tu_api_key
- *    - GOOGLE_SEARCH_ENGINE_ID=tu_search_engine_id
- * 
- * Documentación: https://developers.google.com/custom-search/v1/overview
+ * Provider para Google Custom Search JSON API
+ * Permite buscar productos por código de barras usando un Motor de Búsqueda Programable.
+ *
+ * Documentación oficial:
+ * - Introducción: https://developers.google.com/custom-search/v1/introduction
+ * - Uso REST: https://developers.google.com/custom-search/v1/using_rest
+ * - Parámetros (cse.list): https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list
+ *
+ * Setup (según la doc):
+ * 1. Crear Motor de Búsqueda Programable en https://programmablesearchengine.google.com/
+ *    El ID del motor (cx) está en Descripción general → sección Básico.
+ *    Debe ser "Buscar en toda la web", no solo "Imágenes" (si no, la API puede devolver 400).
+ * 2. En Google Cloud: habilitar Custom Search API y crear clave de API.
+ * 3. Variables de entorno: GOOGLE_API_KEY, GOOGLE_SEARCH_ENGINE_ID (cx).
  */
 export const googleProvider: ProductProvider = {
   name: 'google',
@@ -122,19 +124,20 @@ export const googleProvider: ProductProvider = {
         return null;
       }
 
-      logger.barcode.provider(`google: llamando Custom Search API q="${cleanedBarcode}"`);
-      // Buscar en Google Custom Search (sin 'fields' para evitar 400)
+      // Petición mínima: solo key, cx, q (evita 400 por parámetros no soportados en algunos entornos)
+      const params: Record<string, string> = {
+        key: apiKey,
+        cx: searchEngineId,
+        q: cleanedBarcode
+      };
+      logger.barcode.provider(`google: llamando Custom Search API q="${cleanedBarcode}" cx=${searchEngineId}`);
+
       const response = await axios.get(
         'https://www.googleapis.com/customsearch/v1',
         {
-          params: {
-            key: apiKey,
-            cx: searchEngineId,
-            q: cleanedBarcode,
-            num: 5,
-            safe: 'active'
-          },
-          timeout: 5000
+          params,
+          timeout: 5000,
+          paramsSerializer: (p) => new URLSearchParams(p).toString()
         }
       );
 
