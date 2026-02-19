@@ -123,8 +123,7 @@ export const googleProvider: ProductProvider = {
       }
 
       logger.barcode.provider(`google: llamando Custom Search API q="${cleanedBarcode}"`);
-      // Buscar en Google Custom Search
-      // Incluimos "site:google.com/shopping" para priorizar resultados de Google Shopping
+      // Buscar en Google Custom Search (sin 'fields' para evitar 400)
       const response = await axios.get(
         'https://www.googleapis.com/customsearch/v1',
         {
@@ -132,9 +131,8 @@ export const googleProvider: ProductProvider = {
             key: apiKey,
             cx: searchEngineId,
             q: cleanedBarcode,
-            num: 5, // Máximo 5 resultados
-            safe: 'active',
-            fields: 'items(title,link,snippet,displayLink,pagemap)'
+            num: 5,
+            safe: 'active'
           },
           timeout: 5000
         }
@@ -194,12 +192,21 @@ export const googleProvider: ProductProvider = {
       return null;
     } catch (error: any) {
       const ms = Date.now() - start;
-      if (error.response?.status === 429) {
+      const status = error.response?.status;
+      const body = error.response?.data;
+      const detail = body?.error?.message || body?.error?.errors?.[0]?.message || error.message;
+
+      if (status === 429) {
         logger.barcode.provider(`google: rate limit (429) barcode=${barcode} ${ms}ms`);
-      } else if (error.response?.status === 403) {
+      } else if (status === 403) {
         logger.barcode.provider(`google: API key inválida o sin permisos (403) ${ms}ms`);
+      } else if (status === 400) {
+        logger.barcode.provider(`google: 400 Bad Request → ${detail} (${ms}ms)`);
+        if (body?.error?.message) {
+          logger.barcode.error(`google response: ${JSON.stringify(body.error)}`);
+        }
       } else {
-        logger.barcode.provider(`google: error → ${error.message} (${ms}ms)`);
+        logger.barcode.provider(`google: error → ${detail} (${ms}ms)`);
       }
       return null;
     }
