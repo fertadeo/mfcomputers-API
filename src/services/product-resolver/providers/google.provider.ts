@@ -1,6 +1,8 @@
-import axios from 'axios';
+import { google } from 'googleapis';
 import { ProductProvider, ProductResult } from '../types';
 import { logger } from '../../../utils/logger';
+
+const customsearch = google.customsearch('v1');
 
 /**
  * Helper: Extrae precio de un texto (formato: $1.500,00 o $1500.00)
@@ -89,20 +91,18 @@ function extractCategoryFromLink(link: string): string | null {
 }
 
 /**
- * Provider para Google Custom Search JSON API
- * Permite buscar productos por código de barras usando un Motor de Búsqueda Programable.
+ * Provider para Google Custom Search JSON API.
+ * Usa el cliente oficial Node.js (googleapis) para cse.list.
  *
- * Documentación oficial:
- * - Introducción: https://developers.google.com/custom-search/v1/introduction
- * - Uso REST: https://developers.google.com/custom-search/v1/using_rest
- * - Parámetros (cse.list): https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list
+ * Documentación:
+ * - Cliente Node.js: https://googleapis.dev/nodejs/googleapis/latest/
+ * - Custom Search: https://googleapis.dev/nodejs/googleapis/latest/customsearch/classes/Resource$Cse.html
+ * - API REST: https://developers.google.com/custom-search/v1/introduction
  *
- * Setup (según la doc):
- * 1. Crear Motor de Búsqueda Programable en https://programmablesearchengine.google.com/
- *    El ID del motor (cx) está en Descripción general → sección Básico.
- *    Debe ser "Buscar en toda la web", no solo "Imágenes" (si no, la API puede devolver 400).
- * 2. En Google Cloud: habilitar Custom Search API y crear clave de API.
- * 3. Variables de entorno: GOOGLE_API_KEY, GOOGLE_SEARCH_ENGINE_ID (cx).
+ * Setup:
+ * 1. Motor en https://programmablesearchengine.google.com/ → "Buscar en toda la web".
+ * 2. Google Cloud: habilitar Custom Search API, crear clave de API.
+ * 3. GOOGLE_API_KEY, GOOGLE_SEARCH_ENGINE_ID (cx).
  */
 export const googleProvider: ProductProvider = {
   name: 'google',
@@ -124,29 +124,22 @@ export const googleProvider: ProductProvider = {
         return null;
       }
 
-      // Petición mínima: solo key, cx, q (evita 400 por parámetros no soportados en algunos entornos)
-      const params: Record<string, string> = {
-        key: apiKey,
-        cx: searchEngineId,
-        q: cleanedBarcode
-      };
+      // Cliente oficial googleapis: construye la petición como la API la espera (doc: https://googleapis.dev/nodejs/googleapis/latest/)
       logger.barcode.provider(`google: llamando Custom Search API q="${cleanedBarcode}" cx=${searchEngineId}`);
 
-      const response = await axios.get(
-        'https://www.googleapis.com/customsearch/v1',
-        {
-          params,
-          timeout: 5000,
-          paramsSerializer: (p) => new URLSearchParams(p).toString()
-        }
-      );
+      const response = await customsearch.cse.list({
+        auth: apiKey,
+        cx: searchEngineId,
+        q: cleanedBarcode
+      }, { timeout: 5000 });
 
-      if (response.data?.items && response.data.items.length > 0) {
+      const data = response.data;
+      if (data?.items && data.items.length > 0) {
         // Buscar el mejor resultado (priorizar Google Shopping o tiendas conocidas)
-        let bestResult = response.data.items[0];
+        let bestResult = data.items[0];
         
         // Priorizar resultados de Google Shopping o tiendas de e-commerce
-        for (const item of response.data.items) {
+        for (const item of data.items) {
           const link = item.link?.toLowerCase() || '';
           if (link.includes('google.com/shopping') || 
               link.includes('mercadolibre.com') ||
@@ -205,6 +198,7 @@ export const googleProvider: ProductProvider = {
         logger.barcode.provider(`google: API key inválida o sin permisos (403) ${ms}ms`);
       } else if (status === 400) {
         logger.barcode.provider(`google: 400 Bad Request → ${detail} (${ms}ms)`);
+        logger.barcode.provider(`google: Revisar: motor en programmablesearchengine.google.com debe ser "Buscar en toda la web"; API key con Custom Search API habilitada.`);
         if (body?.error?.message) {
           logger.barcode.error(`google response: ${JSON.stringify(body.error)}`);
         }
