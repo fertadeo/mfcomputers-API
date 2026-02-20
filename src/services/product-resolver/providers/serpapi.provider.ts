@@ -57,7 +57,7 @@ function extractCategoryFromLink(link: string): string | null {
 }
 
 /**
- * Respuesta orgánica de SerpApi (Google Search)
+ * Resultado orgánico SerpApi (Google Search)
  * https://serpapi.com/search-api
  */
 interface SerpApiOrganicResult {
@@ -79,9 +79,66 @@ interface SerpApiResponse {
 }
 
 /**
- * Provider para SerpApi (Google Search vía SerpApi).
- * Una API key, sin motor (cx). Documentación: https://serpapi.com/search-api
- *
+ * Resultado Google Shopping (SerpApi) - mejores imágenes para productos
+ * https://serpapi.com/google-shopping-new-layout
+ */
+interface SerpApiShoppingResult {
+  position?: number;
+  title?: string;
+  link?: string;
+  product_link?: string;
+  snippet?: string;
+  source?: string;
+  price?: string;
+  extracted_price?: number;
+  thumbnail?: string;
+  serpapi_thumbnail?: string;
+  thumbnails?: string[];
+  serpapi_thumbnails?: string[];
+}
+
+interface SerpApiShoppingResponse {
+  shopping_results?: SerpApiShoppingResult[];
+  inline_shopping_results?: SerpApiShoppingResult[];
+  error?: string;
+}
+
+/**
+ * Resultado Google Images (SerpApi) - fallback para obtener al menos una imagen
+ * https://serpapi.com/google-images-api
+ */
+interface SerpApiImagesResult {
+  position?: number;
+  title?: string;
+  image?: string;
+  thumbnail?: string;
+  link?: string;
+}
+
+interface SerpApiImagesResponse {
+  images_results?: SerpApiImagesResult[];
+  error?: string;
+}
+
+/** Añade URLs de imagen sin duplicados; prioriza serpapi_* (mejor calidad). */
+function collectImageUrls(images: string[], ...candidates: (string | string[] | undefined)[]): void {
+  const seen = new Set(images);
+  for (const c of candidates) {
+    if (!c) continue;
+    const urls = Array.isArray(c) ? c : [c];
+    for (const url of urls) {
+      if (url && url.startsWith('http') && !seen.has(url)) {
+        seen.add(url);
+        images.push(url);
+      }
+    }
+  }
+}
+
+/**
+ * Provider para SerpApi: Google Shopping (prioridad) y Google Search (fallback).
+ * Prioriza imágenes de calidad (serpapi_thumbnail, thumbnails). Si no hay imagen,
+ * intenta Google Images con el título del producto.
  * Variables de entorno: SERPAPI_KEY
  */
 export const serpapiProvider: ProductProvider = {
@@ -102,65 +159,103 @@ export const serpapiProvider: ProductProvider = {
         return null;
       }
 
-      logger.barcode.provider(`serpapi: llamando API q="${cleanedBarcode}"`);
+      const baseParams = { api_key: apiKey };
+      let title = 'Producto encontrado';
+      let snippet = '';
+      let link = '';
+      let price: number | null = null;
+      let brand: string | null = null;
+      let category: string | null = null;
+      const images: string[] = [];
 
-      const response = await axios.get<SerpApiResponse>('https://serpapi.com/search', {
-        params: {
-          engine: 'google',
-          api_key: apiKey,
-          q: cleanedBarcode,
-        },
-        timeout: 8000,
-      });
-
-      const data = response.data;
-      if (data.error) {
-        logger.barcode.provider(`serpapi: API error → ${data.error} (${Date.now() - start}ms)`);
-        return null;
+      // 1) Intentar Google Shopping primero (mejor imagen de producto)
+      try {
+        logger.barcode.provider(`serpapi: intentando Google Shopping q="${cleanedBarcode}"`);
+        const shopRes = await axios.get<SerpApiShoppingResponse>('https://serpapi.com/search', {
+          params: { ...baseParams, engine: 'google_shopping', q: cleanedBarcode },
+          timeout: 8000,
+        });
+        const shop = shopRes.data;
+        if (!shop.error && (shop.shopping_results?.length || shop.inline_shopping_results?.length)) {
+          const items = (shop.shopping_results?.length ? shop.shopping_results : shop.inline_shopping_results) || [];
+          const best = items[0];
+          title = best.title || title;
+          snippet = best.snippet || '';
+          link = best.link || best.product_link || '';
+          price = best.extracted_price ?? extractPriceFromText(`${best.price || ''} ${snippet}`.trim());
+          brand = extractBrandFromText(title + ' ' + snippet);
+          category = link ? extractCategoryFromLink(link) : null;
+          collectImageUrls(images, best.serpapi_thumbnail, best.thumbnail, best.serpapi_thumbnails, best.thumbnails);
+          logger.barcode.provider(`serpapi: Google Shopping → "${cleanTitle(title)}" imágenes=${images.length}`);
+        }
+      } catch (_) {
+        // seguir a Google Search
       }
 
-      // Priorizar shopping_results si existe, sino organic_results
-      const items = (data.shopping_results && data.shopping_results.length > 0)
-        ? data.shopping_results
-        : data.organic_results;
-
-      if (!items || items.length === 0) {
-        logger.barcode.provider(`serpapi: sin resultados (${Date.now() - start}ms)`);
-        return null;
+      // 2) Si no hubo resultado de Shopping, usar Google Search
+      if (!snippet && !link && title === 'Producto encontrado') {
+        const response = await axios.get<SerpApiResponse>('https://serpapi.com/search', {
+          params: { ...baseParams, engine: 'google', q: cleanedBarcode },
+          timeout: 8000,
+        });
+        const data = response.data;
+        if (data.error) {
+          logger.barcode.provider(`serpapi: API error → ${data.error} (${Date.now() - start}ms)`);
+          return null;
+        }
+        const items = (data.shopping_results?.length ? data.shopping_results : data.organic_results) || [];
+        if (items.length === 0) {
+          logger.barcode.provider(`serpapi: sin resultados (${Date.now() - start}ms)`);
+          return null;
+        }
+        let best = items[0];
+        for (const item of items) {
+          const linkLower = (item.link || '').toLowerCase();
+          if (linkLower.includes('mercadolibre.com') || linkLower.includes('amazon.') || linkLower.includes('.com.ar') || linkLower.includes('tienda')) {
+            best = item;
+            break;
+          }
+        }
+        title = best.title || title;
+        snippet = best.snippet || '';
+        link = best.link || '';
+        price = extractPriceFromText(`${best.price || ''} ${snippet || title}`.trim());
+        brand = extractBrandFromText(title + ' ' + snippet);
+        category = link ? extractCategoryFromLink(link) : null;
+        collectImageUrls(images, best.thumbnail);
+        logger.barcode.provider(`serpapi: Google Search → "${cleanTitle(title)}" imágenes=${images.length}`);
       }
 
-      // Priorizamos resultados de e-commerce y dominios .com.ar cuando existan
-      let best = items[0];
-      for (const item of items) {
-        const linkLower = (item.link || '').toLowerCase();
-        if (
-          linkLower.includes('mercadolibre.com') ||
-          linkLower.includes('amazon.') ||
-          linkLower.includes('.com.ar') ||
-          linkLower.includes('tienda')
-        ) {
-          best = item;
-          break;
+      // 3) Si tenemos producto pero ninguna imagen, intentar Google Images con el título
+      if (images.length === 0 && title && title !== 'Producto encontrado') {
+        const query = cleanTitle(title).slice(0, 120);
+        try {
+          const imgRes = await axios.get<SerpApiImagesResponse>('https://serpapi.com/search', {
+            params: { ...baseParams, engine: 'google_images', q: query },
+            timeout: 6000,
+          });
+          const imgData = imgRes.data;
+          if (!imgData.error && imgData.images_results?.length) {
+            const first = imgData.images_results[0];
+            const imgUrl = first.image || first.thumbnail;
+            if (imgUrl) {
+              images.push(imgUrl);
+              logger.barcode.provider(`serpapi: imagen por Google Images (título)`);
+            }
+          }
+        } catch (_) {
+          // ignorar fallo de imágenes
         }
       }
 
-      const title = best.title || 'Producto encontrado';
-      const snippet = best.snippet || '';
-      const link = best.link || '';
-      const price = extractPriceFromText(`${best.price || ''} ${snippet || title}`.trim());
-      const brand = extractBrandFromText(title + ' ' + snippet);
-      const category = link ? extractCategoryFromLink(link) : null;
-      const images: string[] = [];
-      if (best.thumbnail) images.push(best.thumbnail);
-
-      logger.barcode.provider(`serpapi: encontrado → "${cleanTitle(title)}" (${Date.now() - start}ms)`);
+      logger.barcode.provider(`serpapi: encontrado → "${cleanTitle(title)}" (${Date.now() - start}ms) imágenes=${images.length}`);
       return {
         title: cleanTitle(title),
         description: snippet || undefined,
         brand: brand || undefined,
         images: images.length > 0 ? images : undefined,
         source: 'serpapi',
-        suggested_price: price || undefined,
+        suggested_price: price ?? undefined,
         category_suggestion: category || undefined,
       };
     } catch (error: any) {
