@@ -3,21 +3,23 @@ import { upcProvider } from './providers/upc.provider';
 import { discogsProvider } from './providers/discogs.provider';
 import { tiendaProvider } from './providers/tienda.provider';
 import { googleProvider } from './providers/google.provider';
+import { serpapiProvider } from './providers/serpapi.provider';
 import { logger } from '../../utils/logger';
 
 /**
  * Lista de providers disponibles, ordenados por prioridad
- * 
- * Orden de ejecución:
- * 1. upcProvider - Base de datos UPCItemDB (rápido, sin API key)
- * 2. discogsProvider - Especializado en música (requiere API key)
- * 3. googleProvider - Google Custom Search (requiere API key, alta cobertura)
- * 4. tiendaProvider - Placeholder para futuros providers
+ *
+ * 1. upcProvider - UPCItemDB (rápido, sin API key)
+ * 2. discogsProvider - Música (requiere API key)
+ * 3. serpapiProvider - SerpApi Google Search (SERPAPI_KEY, principal)
+ * 4. googleProvider - Google Custom Search (GOOGLE_API_KEY + GOOGLE_SEARCH_ENGINE_ID, fallback)
+ * 5. tiendaProvider - Placeholder
  */
 const providers: ProductProvider[] = [
   upcProvider,
   discogsProvider,
-  googleProvider, // Agregado: Google Custom Search
+  serpapiProvider,
+  googleProvider,
   tiendaProvider
 ];
 

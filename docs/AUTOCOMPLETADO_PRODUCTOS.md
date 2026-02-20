@@ -84,6 +84,8 @@ export async function resolveProduct(barcode: string) {
   const providers: ProductProvider[] = [
     upcProvider,
     discogsProvider,
+    serpapiProvider, // principal externo
+    googleProvider,  // fallback externo
     tiendaProvider
   ];
 
@@ -1922,6 +1924,20 @@ export const googleProvider: ProductProvider = {
    ```
 
 **Costo:** 100 búsquedas gratis/día, luego $5 por 1000 búsquedas
+
+**Estrategia operativa recomendada (actual):**
+- `SERPAPI_KEY` como buscador principal (menos fricción de setup).
+- `GOOGLE_API_KEY` + `GOOGLE_SEARCH_ENGINE_ID` como fallback cuando SerpApi falle por cuota/autenticación.
+
+**Variables de entorno sugeridas:**
+```env
+# Principal
+SERPAPI_KEY=tu_serpapi_key
+
+# Fallback opcional
+GOOGLE_API_KEY=tu_api_key_google
+GOOGLE_SEARCH_ENGINE_ID=tu_search_engine_id
+```
 
 ---
 
