@@ -1,8 +1,8 @@
-import { google } from 'googleapis';
+import { customsearch } from '@googleapis/customsearch';
 import { ProductProvider, ProductResult } from '../types';
 import { logger } from '../../../utils/logger';
 
-const customsearch = google.customsearch('v1');
+const customsearchClient = customsearch('v1');
 
 /**
  * Helper: Extrae precio de un texto (formato: $1.500,00 o $1500.00)
@@ -92,11 +92,10 @@ function extractCategoryFromLink(link: string): string | null {
 
 /**
  * Provider para Google Custom Search JSON API.
- * Usa el cliente oficial Node.js (googleapis) para cse.list.
+ * Usa solo @googleapis/customsearch (submódulo ligero, sin el paquete googleapis completo).
  *
  * Documentación:
- * - Cliente Node.js: https://googleapis.dev/nodejs/googleapis/latest/
- * - Custom Search: https://googleapis.dev/nodejs/googleapis/latest/customsearch/classes/Resource$Cse.html
+ * - npm: https://www.npmjs.com/package/@googleapis/customsearch
  * - API REST: https://developers.google.com/custom-search/v1/introduction
  *
  * Setup:
@@ -124,10 +123,10 @@ export const googleProvider: ProductProvider = {
         return null;
       }
 
-      // Cliente oficial googleapis: construye la petición como la API la espera (doc: https://googleapis.dev/nodejs/googleapis/latest/)
+      // @googleapis/customsearch: cliente ligero solo para Custom Search (cse.list)
       logger.barcode.provider(`google: llamando Custom Search API q="${cleanedBarcode}" cx=${searchEngineId}`);
 
-      const response = await customsearch.cse.list({
+      const response = await customsearchClient.cse.list({
         auth: apiKey,
         cx: searchEngineId,
         q: cleanedBarcode

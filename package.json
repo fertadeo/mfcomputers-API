@@ -24,6 +24,7 @@
   "author": "MF Computers",
   "license": "ISC",
   "dependencies": {
+    "@googleapis/customsearch": "^7.0.1",
     "axios": "^1.13.5",
     "bcryptjs": "^2.4.3",
     "chalk": "^4.1.2",
@@ -33,7 +34,6 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-validator": "^7.2.1",
-    "googleapis": "^171.4.0",
     "helmet": "^7.0.0",
     "joi": "^17.9.2",
     "jsonwebtoken": "^9.0.2",
