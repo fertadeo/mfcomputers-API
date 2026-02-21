@@ -68,6 +68,7 @@ export class BarcodeLookupService {
         brand: cachedResult.brand || undefined,
         images: cachedResult.images || undefined,
         source: cachedResult.source,
+        source_site: cachedResult.source_site ?? undefined,
         suggested_price: cachedResult.suggested_price || undefined,
         category_suggestion: cachedResult.category_suggestion || undefined,
         exists_as_product: false,
@@ -102,6 +103,7 @@ export class BarcodeLookupService {
         brand: providerResult.brand || null,
         images: providerResult.images || null,
         source: providerResult.source,
+        source_site: providerResult.source_site ?? null,
         suggested_price: providerResult.suggested_price || null,
         category_suggestion: providerResult.category_suggestion || null,
         raw_json: null // Deshabilitado temporalmente para evitar errores de paquete

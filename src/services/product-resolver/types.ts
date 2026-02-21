@@ -7,6 +7,7 @@ export interface ProductResult {
   brand?: string;
   images?: string[];
   source: string;
+  source_site?: string; // Sitio donde se encontró (ej. "Mercado Libre", "Fravega")
   suggested_price?: number; // Precio sugerido si está disponible
   category_suggestion?: string; // Categoría sugerida
   provider_response_time?: number; // Tiempo de respuesta del provider en ms
@@ -29,6 +30,7 @@ export interface BarcodeLookupResponse {
   brand?: string;
   images?: string[];
   source: string;
+  source_site?: string; // Sitio donde se encontró (ej. "Mercado Libre", "Fravega")
   suggested_price?: number;
   category_suggestion?: string;
   exists_as_product?: boolean;

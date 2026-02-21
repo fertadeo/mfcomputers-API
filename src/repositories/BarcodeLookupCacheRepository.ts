@@ -8,6 +8,7 @@ export interface BarcodeLookupCache {
   brand?: string | null;
   images?: string[] | null;
   source: string;
+  source_site?: string | null;
   raw_json?: any | null;
   suggested_price?: number | null;
   category_suggestion?: string | null;
@@ -27,6 +28,7 @@ export interface CreateBarcodeLookupCacheData {
   brand?: string | null;
   images?: string[] | null;
   source: string;
+  source_site?: string | null;
   raw_json?: any | null;
   suggested_price?: number | null;
   category_suggestion?: string | null;
@@ -70,6 +72,7 @@ export class BarcodeLookupCacheRepository {
         brand = ?,
         images = ?,
         source = ?,
+        source_site = ?,
         raw_json = ?,
         suggested_price = ?,
         category_suggestion = ?,
@@ -105,6 +108,7 @@ export class BarcodeLookupCacheRepository {
       data.brand ?? null,
       data.images ? JSON.stringify(data.images) : null,
       data.source,
+      data.source_site ?? null,
       rawJsonString,
       data.suggested_price ?? null,
       data.category_suggestion ?? null,
@@ -117,10 +121,10 @@ export class BarcodeLookupCacheRepository {
     if ((updateResult as any).affectedRows === 0) {
       const insertQuery = `
         INSERT INTO barcode_lookup_cache (
-          barcode, title, description, brand, images, source,
+          barcode, title, description, brand, images, source, source_site,
           raw_json, suggested_price, category_suggestion
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       // Crear parámetros de inserción explícitamente
@@ -131,6 +135,7 @@ export class BarcodeLookupCacheRepository {
         data.brand ?? null,
         data.images ? JSON.stringify(data.images) : null,
         data.source,
+        data.source_site ?? null,
         rawJsonString, // Ya serializado como string o null
         data.suggested_price ?? null,
         data.category_suggestion ?? null
@@ -144,10 +149,10 @@ export class BarcodeLookupCacheRepository {
           console.warn('Error con raw_json, intentando insertar sin raw_json');
           const insertQueryWithoutJson = `
             INSERT INTO barcode_lookup_cache (
-              barcode, title, description, brand, images, source,
+              barcode, title, description, brand, images, source, source_site,
               suggested_price, category_suggestion
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `;
           const paramsWithoutJson = [
             data.barcode,
@@ -156,6 +161,7 @@ export class BarcodeLookupCacheRepository {
             data.brand ?? null,
             data.images ? JSON.stringify(data.images) : null,
             data.source,
+            data.source_site ?? null,
             data.suggested_price ?? null,
             data.category_suggestion ?? null
           ];

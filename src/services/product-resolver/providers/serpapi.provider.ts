@@ -160,9 +160,11 @@ export const serpapiProvider: ProductProvider = {
       }
 
       const baseParams = { api_key: apiKey };
+      const locationParams = { google_domain: 'google.com.ar' as const, gl: 'ar', hl: 'es' };
       let title = 'Producto encontrado';
       let snippet = '';
       let link = '';
+      let source_site: string | null = null;
       let price: number | null = null;
       let brand: string | null = null;
       let category: string | null = null;
@@ -172,7 +174,7 @@ export const serpapiProvider: ProductProvider = {
       try {
         logger.barcode.provider(`serpapi: intentando Google Shopping q="${cleanedBarcode}"`);
         const shopRes = await axios.get<SerpApiShoppingResponse>('https://serpapi.com/search', {
-          params: { ...baseParams, engine: 'google_shopping', q: cleanedBarcode },
+          params: { ...baseParams, ...locationParams, engine: 'google_shopping', q: cleanedBarcode },
           timeout: 8000,
         });
         const shop = shopRes.data;
@@ -182,6 +184,7 @@ export const serpapiProvider: ProductProvider = {
           title = best.title || title;
           snippet = best.snippet || '';
           link = best.link || best.product_link || '';
+          source_site = best.source || null;
           price = best.extracted_price ?? extractPriceFromText(`${best.price || ''} ${snippet}`.trim());
           brand = extractBrandFromText(title + ' ' + snippet);
           category = link ? extractCategoryFromLink(link) : null;
@@ -195,7 +198,7 @@ export const serpapiProvider: ProductProvider = {
       // 2) Si no hubo resultado de Shopping, usar Google Search
       if (!snippet && !link && title === 'Producto encontrado') {
         const response = await axios.get<SerpApiResponse>('https://serpapi.com/search', {
-          params: { ...baseParams, engine: 'google', q: cleanedBarcode },
+          params: { ...baseParams, ...locationParams, engine: 'google', q: cleanedBarcode },
           timeout: 8000,
         });
         const data = response.data;
@@ -219,6 +222,7 @@ export const serpapiProvider: ProductProvider = {
         title = best.title || title;
         snippet = best.snippet || '';
         link = best.link || '';
+        source_site = best.source || null;
         price = extractPriceFromText(`${best.price || ''} ${snippet || title}`.trim());
         brand = extractBrandFromText(title + ' ' + snippet);
         category = link ? extractCategoryFromLink(link) : null;
@@ -231,7 +235,7 @@ export const serpapiProvider: ProductProvider = {
         const query = cleanTitle(title).slice(0, 120);
         try {
           const imgRes = await axios.get<SerpApiImagesResponse>('https://serpapi.com/search', {
-            params: { ...baseParams, engine: 'google_images', q: query },
+            params: { ...baseParams, ...locationParams, engine: 'google_images', q: query },
             timeout: 6000,
           });
           const imgData = imgRes.data;
@@ -255,6 +259,7 @@ export const serpapiProvider: ProductProvider = {
         brand: brand || undefined,
         images: images.length > 0 ? images : undefined,
         source: 'serpapi',
+        source_site: source_site || undefined,
         suggested_price: price ?? undefined,
         category_suggestion: category || undefined,
       };
