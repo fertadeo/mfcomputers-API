@@ -526,7 +526,8 @@ export class ProductController {
         return;
       }
 
-      const lookupResult = await this.barcodeLookupService.lookupBarcode(code);
+      const preferSite = req.query.prefer_site as 'mercadolibre' | 'fravega' | 'garbarino' | undefined;
+      const lookupResult = await this.barcodeLookupService.lookupBarcode(code, preferSite ? { prefer_site: preferSite } : undefined);
       
       if (!lookupResult) {
         const response: ApiResponse = {

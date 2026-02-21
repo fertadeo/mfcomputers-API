@@ -1,5 +1,5 @@
 import { customsearch } from '@googleapis/customsearch';
-import { ProductProvider, ProductResult } from '../types';
+import { ProductProvider, ProductResult, BarcodeSearchOptions, PREFER_SITE_DOMAINS } from '../types';
 import { logger } from '../../../utils/logger';
 
 const customsearchClient = customsearch('v1');
@@ -106,7 +106,7 @@ function extractCategoryFromLink(link: string): string | null {
 export const googleProvider: ProductProvider = {
   name: 'google',
   
-  async search(barcode: string): Promise<ProductResult | null> {
+  async search(barcode: string, options?: BarcodeSearchOptions): Promise<ProductResult | null> {
     const start = Date.now();
     try {
       const apiKey = process.env.GOOGLE_API_KEY;
@@ -123,13 +123,16 @@ export const googleProvider: ProductProvider = {
         return null;
       }
 
-      // @googleapis/customsearch: cliente ligero solo para Custom Search (cse.list)
-      logger.barcode.provider(`google: llamando Custom Search API q="${cleanedBarcode}" cx=${searchEngineId}`);
+      const preferSite = options?.prefer_site;
+      const siteDomain = preferSite ? PREFER_SITE_DOMAINS[preferSite] : null;
+      const searchQuery = siteDomain ? `${cleanedBarcode} site:${siteDomain}` : cleanedBarcode;
+
+      logger.barcode.provider(`google: llamando Custom Search API q="${searchQuery}" cx=${searchEngineId}`);
 
       const response = await customsearchClient.cse.list({
         auth: apiKey,
         cx: searchEngineId,
-        q: cleanedBarcode
+        q: searchQuery
       }, { timeout: 5000 });
 
       const data = response.data;

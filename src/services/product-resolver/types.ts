@@ -14,11 +14,26 @@ export interface ProductResult {
 }
 
 /**
+ * Opciones de búsqueda por código de barras (ej. restringir a un sitio)
+ */
+export interface BarcodeSearchOptions {
+  /** Restringir resultados a un sitio: mercadolibre, fravega, garbarino */
+  prefer_site?: 'mercadolibre' | 'fravega' | 'garbarino';
+}
+
+/** Dominios para operador site: en búsquedas (prefer_site) */
+export const PREFER_SITE_DOMAINS: Record<NonNullable<BarcodeSearchOptions['prefer_site']>, string> = {
+  mercadolibre: 'mercadolibre.com.ar',
+  fravega: 'fravega.com',
+  garbarino: 'garbarino.com',
+};
+
+/**
  * Interfaz que deben implementar todos los providers de búsqueda
  */
 export interface ProductProvider {
   name: string;
-  search(barcode: string): Promise<ProductResult | null>;
+  search(barcode: string, options?: BarcodeSearchOptions): Promise<ProductResult | null>;
 }
 
 /**

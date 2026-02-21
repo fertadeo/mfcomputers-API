@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ProductProvider, ProductResult } from '../types';
+import { ProductProvider, ProductResult, BarcodeSearchOptions, PREFER_SITE_DOMAINS } from '../types';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -144,7 +144,7 @@ function collectImageUrls(images: string[], ...candidates: (string | string[] | 
 export const serpapiProvider: ProductProvider = {
   name: 'serpapi',
 
-  async search(barcode: string): Promise<ProductResult | null> {
+  async search(barcode: string, options?: BarcodeSearchOptions): Promise<ProductResult | null> {
     const start = Date.now();
     try {
       const apiKey = process.env.SERPAPI_KEY;
@@ -159,6 +159,10 @@ export const serpapiProvider: ProductProvider = {
         return null;
       }
 
+      const preferSite = options?.prefer_site;
+      const siteDomain = preferSite ? PREFER_SITE_DOMAINS[preferSite] : null;
+      const searchQuery = siteDomain ? `${cleanedBarcode} site:${siteDomain}` : cleanedBarcode;
+
       const baseParams = { api_key: apiKey };
       const locationParams = { google_domain: 'google.com.ar' as const, gl: 'ar', hl: 'es' };
       let title = 'Producto encontrado';
@@ -170,35 +174,38 @@ export const serpapiProvider: ProductProvider = {
       let category: string | null = null;
       const images: string[] = [];
 
-      // 1) Intentar Google Shopping primero (mejor imagen de producto)
-      try {
-        logger.barcode.provider(`serpapi: intentando Google Shopping q="${cleanedBarcode}"`);
-        const shopRes = await axios.get<SerpApiShoppingResponse>('https://serpapi.com/search', {
-          params: { ...baseParams, ...locationParams, engine: 'google_shopping', q: cleanedBarcode },
-          timeout: 8000,
-        });
-        const shop = shopRes.data;
-        if (!shop.error && (shop.shopping_results?.length || shop.inline_shopping_results?.length)) {
-          const items = (shop.shopping_results?.length ? shop.shopping_results : shop.inline_shopping_results) || [];
-          const best = items[0];
-          title = best.title || title;
-          snippet = best.snippet || '';
-          link = best.link || best.product_link || '';
-          source_site = best.source || null;
-          price = best.extracted_price ?? extractPriceFromText(`${best.price || ''} ${snippet}`.trim());
-          brand = extractBrandFromText(title + ' ' + snippet);
-          category = link ? extractCategoryFromLink(link) : null;
-          collectImageUrls(images, best.serpapi_thumbnail, best.thumbnail, best.serpapi_thumbnails, best.thumbnails);
-          logger.barcode.provider(`serpapi: Google Shopping → "${cleanTitle(title)}" imágenes=${images.length}`);
+      // 1) Con prefer_site solo usamos Google Search con site:; sin prefer_site intentamos Google Shopping primero
+      if (!siteDomain) {
+        try {
+          logger.barcode.provider(`serpapi: intentando Google Shopping q="${cleanedBarcode}"`);
+          const shopRes = await axios.get<SerpApiShoppingResponse>('https://serpapi.com/search', {
+            params: { ...baseParams, ...locationParams, engine: 'google_shopping', q: cleanedBarcode },
+            timeout: 8000,
+          });
+          const shop = shopRes.data;
+          if (!shop.error && (shop.shopping_results?.length || shop.inline_shopping_results?.length)) {
+            const items = (shop.shopping_results?.length ? shop.shopping_results : shop.inline_shopping_results) || [];
+            const best = items[0];
+            title = best.title || title;
+            snippet = best.snippet || '';
+            link = best.link || best.product_link || '';
+            source_site = best.source || null;
+            price = best.extracted_price ?? extractPriceFromText(`${best.price || ''} ${snippet}`.trim());
+            brand = extractBrandFromText(title + ' ' + snippet);
+            category = link ? extractCategoryFromLink(link) : null;
+            collectImageUrls(images, best.serpapi_thumbnail, best.thumbnail, best.serpapi_thumbnails, best.thumbnails);
+            logger.barcode.provider(`serpapi: Google Shopping → "${cleanTitle(title)}" imágenes=${images.length}`);
+          }
+        } catch (_) {
+          // seguir a Google Search
         }
-      } catch (_) {
-        // seguir a Google Search
       }
 
-      // 2) Si no hubo resultado de Shopping, usar Google Search
+      // 2) Si no hubo resultado de Shopping (o hay prefer_site), usar Google Search
       if (!snippet && !link && title === 'Producto encontrado') {
+        logger.barcode.provider(`serpapi: Google Search q="${searchQuery}"`);
         const response = await axios.get<SerpApiResponse>('https://serpapi.com/search', {
-          params: { ...baseParams, ...locationParams, engine: 'google', q: cleanedBarcode },
+          params: { ...baseParams, ...locationParams, engine: 'google', q: searchQuery },
           timeout: 8000,
         });
         const data = response.data;

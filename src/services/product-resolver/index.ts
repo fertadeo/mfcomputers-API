@@ -1,4 +1,4 @@
-import { ProductProvider, ProductResult } from './types';
+import { ProductProvider, ProductResult, BarcodeSearchOptions } from './types';
 import { upcProvider } from './providers/upc.provider';
 import { discogsProvider } from './providers/discogs.provider';
 import { tiendaProvider } from './providers/tienda.provider';
@@ -25,18 +25,19 @@ const providers: ProductProvider[] = [
 
 /**
  * Resuelve un producto por código de barras consultando múltiples providers en paralelo
- * 
+ *
  * @param barcode Código de barras a buscar
+ * @param options Opciones (ej. prefer_site para restringir a mercadolibre, fravega, garbarino)
  * @returns ProductResult si se encuentra, null si no se encuentra en ningún provider
  */
-export async function resolveProduct(barcode: string): Promise<ProductResult | null> {
+export async function resolveProduct(barcode: string, options?: BarcodeSearchOptions): Promise<ProductResult | null> {
   const startTime = Date.now();
 
-  logger.barcode.provider(`Iniciando ${providers.length} providers en paralelo: ${providers.map(p => p.name).join(', ')}`);
+  logger.barcode.provider(`Iniciando ${providers.length} providers en paralelo: ${providers.map(p => p.name).join(', ')}${options?.prefer_site ? ` (prefer_site=${options.prefer_site})` : ''}`);
 
   try {
     const results = await Promise.allSettled(
-      providers.map(provider => provider.search(barcode))
+      providers.map(provider => provider.search(barcode, options))
     );
 
     // Log resultado de cada provider

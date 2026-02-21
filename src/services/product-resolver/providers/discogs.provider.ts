@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ProductProvider, ProductResult } from '../types';
+import { ProductProvider, ProductResult, BarcodeSearchOptions } from '../types';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -11,7 +11,7 @@ import { logger } from '../../../utils/logger';
 export const discogsProvider: ProductProvider = {
   name: 'discogs',
   
-  async search(barcode: string): Promise<ProductResult | null> {
+  async search(barcode: string, _options?: BarcodeSearchOptions): Promise<ProductResult | null> {
     try {
       // Discogs requiere API key, si no está configurado, retornar null
       const apiKey = process.env.DISCOGS_API_KEY;

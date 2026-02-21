@@ -1,6 +1,6 @@
 import axios from 'axios';
 // import * as cheerio from 'cheerio'; // Descomentar cuando se instale cheerio
-import { ProductProvider, ProductResult } from '../types';
+import { ProductProvider, ProductResult, BarcodeSearchOptions } from '../types';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -15,7 +15,7 @@ import { logger } from '../../../utils/logger';
 export const tiendaProvider: ProductProvider = {
   name: 'tienda',
   
-  async search(barcode: string): Promise<ProductResult | null> {
+  async search(barcode: string, _options?: BarcodeSearchOptions): Promise<ProductResult | null> {
     try {
       // Por ahora, este provider retorna null
       // Se puede implementar scraping de tiendas específicas aquí

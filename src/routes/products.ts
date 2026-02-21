@@ -116,7 +116,8 @@ router.put('/:id/stock',
 
 // Barcode lookup endpoints
 const barcodeValidation = [
-  param('code').notEmpty().withMessage('Código de barras es requerido')
+  param('code').notEmpty().withMessage('Código de barras es requerido'),
+  query('prefer_site').optional().isIn(['mercadolibre', 'fravega', 'garbarino']).withMessage('prefer_site debe ser mercadolibre, fravega o garbarino')
 ];
 
 const acceptBarcodeValidation = [

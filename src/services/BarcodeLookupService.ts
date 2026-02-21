@@ -19,12 +19,14 @@ export class BarcodeLookupService {
 
   /**
    * Busca un producto por código de barras
-   * Prioriza: products existentes → cache → providers externos
+   * Prioriza: products existentes → cache (salvo si prefer_site) → providers externos
+   * @param options.prefer_site Si se indica, no se usa cache y se restringe la búsqueda a ese sitio (mercadolibre, fravega, garbarino)
    */
-  async lookupBarcode(barcode: string): Promise<BarcodeLookupResponse | null> {
+  async lookupBarcode(barcode: string, options?: { prefer_site?: 'mercadolibre' | 'fravega' | 'garbarino' }): Promise<BarcodeLookupResponse | null> {
     const cleanedBarcode = barcode.replace(/[\s-]/g, '');
+    const preferSite = options?.prefer_site;
 
-    logger.barcode.search(`Inicio búsqueda barcode="${cleanedBarcode}"`);
+    logger.barcode.search(`Inicio búsqueda barcode="${cleanedBarcode}"${preferSite ? ` prefer_site=${preferSite}` : ''}`);
 
     // Validar formato
     if (!validateBarcode(barcode)) {
@@ -55,41 +57,45 @@ export class BarcodeLookupService {
     }
     logger.barcode.skip(`Paso 1: No encontrado en products`);
 
-    // Paso 2: Buscar en cache
-    logger.barcode.search(`Paso 2: Buscando en barcode_lookup_cache...`);
-    const cachedResult = await this.cacheRepository.findByBarcode(cleanedBarcode);
-    if (cachedResult && !cachedResult.ignored) {
-      logger.barcode.found(`Encontrado en cache (source=${cachedResult.source}): ${cachedResult.title}`);
-      await this.cacheRepository.updateUsage(cleanedBarcode);
+    // Paso 2: Buscar en cache (omitir si hay prefer_site para forzar nueva búsqueda restringida al sitio)
+    if (!preferSite) {
+      logger.barcode.search(`Paso 2: Buscando en barcode_lookup_cache...`);
+      const cachedResult = await this.cacheRepository.findByBarcode(cleanedBarcode);
+      if (cachedResult && !cachedResult.ignored) {
+        logger.barcode.found(`Encontrado en cache (source=${cachedResult.source}): ${cachedResult.title}`);
+        await this.cacheRepository.updateUsage(cleanedBarcode);
 
-      return {
-        title: cachedResult.title,
-        description: cachedResult.description || undefined,
-        brand: cachedResult.brand || undefined,
-        images: cachedResult.images || undefined,
-        source: cachedResult.source,
-        source_site: cachedResult.source_site ?? undefined,
-        suggested_price: cachedResult.suggested_price || undefined,
-        category_suggestion: cachedResult.category_suggestion || undefined,
-        exists_as_product: false,
-        cached_at: cachedResult.last_used_at || cachedResult.created_at,
-        preview_message: `Hemos encontrado: ${cachedResult.title}`,
-        available_actions: {
-          accept: true,
-          modify: true,
-          ignore: true
-        }
-      };
-    }
-    if (cachedResult?.ignored) {
-      logger.barcode.skip(`Paso 2: En cache pero marcado como ignorado`);
+        return {
+          title: cachedResult.title,
+          description: cachedResult.description || undefined,
+          brand: cachedResult.brand || undefined,
+          images: cachedResult.images || undefined,
+          source: cachedResult.source,
+          source_site: cachedResult.source_site ?? undefined,
+          suggested_price: cachedResult.suggested_price || undefined,
+          category_suggestion: cachedResult.category_suggestion || undefined,
+          exists_as_product: false,
+          cached_at: cachedResult.last_used_at || cachedResult.created_at,
+          preview_message: `Hemos encontrado: ${cachedResult.title}`,
+          available_actions: {
+            accept: true,
+            modify: true,
+            ignore: true
+          }
+        };
+      }
+      if (cachedResult?.ignored) {
+        logger.barcode.skip(`Paso 2: En cache pero marcado como ignorado`);
+      } else {
+        logger.barcode.skip(`Paso 2: No encontrado en cache`);
+      }
     } else {
-      logger.barcode.skip(`Paso 2: No encontrado en cache`);
+      logger.barcode.skip(`Paso 2: omitido (prefer_site=${preferSite}, búsqueda directa en providers)`);
     }
 
-    // Paso 3: Consultar providers externos
+    // Paso 3: Consultar providers externos (con prefer_site si se indicó)
     logger.barcode.search(`Paso 3: Consultando providers externos (UPCItemDB, Discogs, Google, Tienda)...`);
-    const providerResult = await resolveProduct(cleanedBarcode);
+    const providerResult = await resolveProduct(cleanedBarcode, preferSite ? { prefer_site: preferSite } : undefined);
     if (providerResult) {
       logger.barcode.found(`Provider "${providerResult.source}" encontró: ${providerResult.title}`);
       // Extraer solo los datos originales del provider (sin provider_response_time)

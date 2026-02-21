@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ProductProvider, ProductResult } from '../types';
+import { ProductProvider, ProductResult, BarcodeSearchOptions } from '../types';
 import { logger } from '../../../utils/logger';
 
 /**
@@ -9,7 +9,7 @@ import { logger } from '../../../utils/logger';
 export const upcProvider: ProductProvider = {
   name: 'upcitemdb',
   
-  async search(barcode: string): Promise<ProductResult | null> {
+  async search(barcode: string, _options?: BarcodeSearchOptions): Promise<ProductResult | null> {
     try {
       const cleanedBarcode = barcode.replace(/[\s-]/g, '');
       if (!/^\d+$/.test(cleanedBarcode) || cleanedBarcode.length < 8) {
