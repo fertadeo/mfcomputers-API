@@ -96,7 +96,7 @@ Las imágenes se manejan en **dos pasos**: (1) subir el archivo a la galería de
 
 ### Proceso 1: Subir imagen(es) a la galería de WordPress
 
-1. **Requisito:** Variables `WP_APPLICATION_USER` y `WP_APPLICATION_PASSWORD` en `.env` de la API.
+1. **Requisito:** Variables `WP_APPLICATION_USER` y `WP_APPLICATION_PASSWORD` en `.env` de la API. El usuario de WordPress debe tener **rol Administrador o Editor** (necesita la capacidad "Subir archivos" / `upload_files`). Si aparece "no tienes permisos con este usuario para crear entradas", revisa el rol en WordPress → Usuarios.
 2. Enviar una petición **multipart/form-data** al endpoint de media:
 
    ```http

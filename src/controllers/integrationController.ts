@@ -632,6 +632,7 @@ export class IntegrationController {
   }
 
   // Método auxiliar para buscar o crear cliente
+  // options: por defecto mayorista/woocommerce_mayorista (pedidos mayoristas). Para tienda/web usar MINORISTA + WOOCOMMERCE_MINORISTA.
   private async findOrCreateClient(clientData: {
     email: string;
     name: string;
@@ -639,7 +640,10 @@ export class IntegrationController {
     address?: string;
     city?: string;
     country?: string;
-  }): Promise<any> {
+  }, options?: { clientType: ClientType; salesChannel: SalesChannel }): Promise<any> {
+    const clientType = options?.clientType ?? ClientType.MAYORISTA;
+    const salesChannel = options?.salesChannel ?? SalesChannel.WOOCOMMERCE_MAYORISTA;
+
     try {
       // Buscar cliente por email
       const query = 'SELECT * FROM clients WHERE email = ? AND is_active = 1 LIMIT 1';
@@ -650,11 +654,11 @@ export class IntegrationController {
         return existingClient;
       }
 
-      // Crear nuevo cliente (tipo mayorista, canal woocommerce_mayorista)
-      console.log('Creando nuevo cliente:', clientData.email);
+      // Crear nuevo cliente según tipo/canal (minorista para tienda/WooCommerce web, mayorista para pedidos mayoristas)
+      console.log('Creando nuevo cliente:', clientData.email, 'tipo:', clientType, 'canal:', salesChannel);
       
       // Generar código de cliente
-      const code = await this.generateClientCode(ClientType.MAYORISTA);
+      const code = await this.generateClientCode(clientType);
 
       const insertQuery = `
         INSERT INTO clients (
@@ -664,8 +668,8 @@ export class IntegrationController {
 
       const result = await executeQuery(insertQuery, [
         code,
-        ClientType.MAYORISTA,
-        SalesChannel.WOOCOMMERCE_MAYORISTA,
+        clientType,
+        salesChannel,
         clientData.name,
         clientData.email,
         clientData.phone || null,
@@ -1005,15 +1009,18 @@ export class IntegrationController {
         }
       }
 
-      // 1. Buscar o crear cliente
-      const client = await this.findOrCreateClient({
-        email: transformedOrder.customer.email,
-        name: transformedOrder.customer.display_name || transformedOrder.customer.email,
-        phone: transformedOrder.customer.phone || transformedOrder.billing.phone,
-        address: transformedOrder.shipping.address_1 || transformedOrder.billing.address_1,
-        city: transformedOrder.shipping.city || transformedOrder.billing.city,
-        country: transformedOrder.shipping.country || transformedOrder.billing.country || 'Argentina'
-      });
+      // 1. Buscar o crear cliente (minorista - sólo se reciben pedidos minoristas desde WooCommerce/tienda)
+      const client = await this.findOrCreateClient(
+        {
+          email: transformedOrder.customer.email,
+          name: transformedOrder.customer.display_name || transformedOrder.customer.email,
+          phone: transformedOrder.customer.phone || transformedOrder.billing.phone,
+          address: transformedOrder.shipping.address_1 || transformedOrder.billing.address_1,
+          city: transformedOrder.shipping.city || transformedOrder.billing.city,
+          country: transformedOrder.shipping.country || transformedOrder.billing.country || 'Argentina'
+        },
+        { clientType: ClientType.MINORISTA, salesChannel: SalesChannel.WOOCOMMERCE_MINORISTA }
+      );
 
       // 2. Mapear productos y validar existencia
       const orderItems: CreateOrderItemData[] = [];
@@ -1226,6 +1233,59 @@ export class IntegrationController {
       const response: ApiResponse = {
         success: false,
         message: 'Error procesando pedido desde WooCommerce',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+      res.status(500).json(response);
+    }
+  }
+
+  /**
+   * POST /api/integration/clients/register
+   * Registrar un cliente nuevo desde el frontend (tienda).
+   * Si el email ya existe, devuelve el cliente existente (idempotente).
+   * Clientes registrados son minorista, canal woocommerce_minorista.
+   */
+  public async registerClientFromFrontend(req: Request, res: Response): Promise<void> {
+    try {
+      const body = req.body || {};
+      const { name, email, phone, address, city, country } = body;
+
+      if (!email || typeof email !== 'string' || !email.trim()) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'El email es obligatorio',
+          timestamp: new Date().toISOString()
+        };
+        res.status(400).json(response);
+        return;
+      }
+
+      const nameVal = (name && typeof name === 'string' && name.trim()) ? name.trim() : email.trim();
+      const client = await this.findOrCreateClient(
+        {
+          email: email.trim().toLowerCase(),
+          name: nameVal,
+          phone: phone && typeof phone === 'string' ? phone.trim() || undefined : undefined,
+          address: address && typeof address === 'string' ? address.trim() || undefined : undefined,
+          city: city && typeof city === 'string' ? city.trim() || undefined : undefined,
+          country: (country && typeof country === 'string' ? country.trim() : undefined) || 'Argentina'
+        },
+        { clientType: ClientType.MINORISTA, salesChannel: SalesChannel.WOOCOMMERCE_MINORISTA }
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        message: 'Cliente registrado o encontrado correctamente',
+        data: { client },
+        timestamp: new Date().toISOString()
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('Error registrando cliente desde frontend:', error);
+      const response: ApiResponse = {
+        success: false,
+        message: 'Error al registrar cliente',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       };

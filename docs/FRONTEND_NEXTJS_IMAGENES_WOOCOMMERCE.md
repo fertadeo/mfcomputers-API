@@ -194,6 +194,7 @@ Si el producto tiene `woocommerce_image_ids`, la API enviará esas imágenes a W
 ## 5. Errores frecuentes
 
 - **“WordPress Media no está configurado”:** Faltan `WP_APPLICATION_USER` o `WP_APPLICATION_PASSWORD` en el `.env` de la API.
+- **“No tienes permisos con este usuario para crear entradas” (500):** El usuario de WordPress usado en `WP_APPLICATION_USER` no tiene permiso para subir a la galería. Debe tener rol **Administrador** o **Editor** (capacidad "Subir archivos"). Revisar en WordPress → Usuarios el rol de ese usuario.
 - **401 en /api/woocommerce/media:** Revisar que el header `X-API-Key` sea el correcto.
 - **Solo se permiten imágenes (jpeg, png, gif, webp):** El archivo no es una imagen o tiene otra extensión; usar `accept` en el input y validar en el cliente.
 - **Producto en WooCommerce sin imagen:** Verificar que el producto en el ERP tenga `woocommerce_image_ids` (o `images` con URLs públicas) y que hayas llamado a sync.

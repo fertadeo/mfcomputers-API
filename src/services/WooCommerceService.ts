@@ -41,8 +41,27 @@ export class WooCommerceService {
   }
 
   /**
+   * Asegura que el nombre del archivo tenga la extensión correcta según el MIME type.
+   * WordPress y algunos servidores validan la extensión; sin .webp puede rechazar image/webp.
+   */
+  private normalizeMediaFilename(filename: string, mimeType: string): string {
+    const extByMime: Record<string, string> = {
+      'image/jpeg': '.jpg',
+      'image/jpg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+    };
+    const ext = extByMime[mimeType.toLowerCase()] || '';
+    const base = filename.replace(/\.[^.]+$/, '') || 'image';
+    const safeBase = base.replace(/[^\w\-]/g, '_').slice(0, 200);
+    return ext ? `${safeBase}${ext}` : filename;
+  }
+
+  /**
    * Sube un archivo a la galería multimedia de WordPress (wp/v2/media).
    * Requiere WP_APPLICATION_USER y WP_APPLICATION_PASSWORD en .env.
+   * El usuario de WordPress debe tener rol Administrador o Editor (capacidad upload_files).
    * Devuelve el id y source_url para usar en el producto: images: [{ id }]
    */
   async uploadMediaToWordPress(
@@ -56,6 +75,7 @@ export class WooCommerceService {
       );
     }
 
+    const normalizedFilename = this.normalizeMediaFilename(filename, mimeType);
     const url = `${this.baseUrl.replace(/\/$/, '')}/wp-json/wp/v2/media`;
     const auth = Buffer.from(`${this.wpUser}:${this.wpApplicationPassword}`, 'utf8').toString('base64');
 
@@ -63,7 +83,7 @@ export class WooCommerceService {
       method: 'POST',
       headers: {
         'Content-Type': mimeType,
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${normalizedFilename}"`,
         'Authorization': `Basic ${auth}`,
       },
       body: fileBuffer,
@@ -79,6 +99,11 @@ export class WooCommerceService {
 
     if (!response.ok) {
       const msg = data?.message || data?.code || `HTTP ${response.status}`;
+      if (typeof msg === 'string' && (msg.includes('permisos') || msg.includes('permission') || msg.includes('capability'))) {
+        throw new Error(
+          `WordPress Media Error: ${msg} Comprueba que el usuario (WP_APPLICATION_USER) tenga rol Administrador o Editor en WordPress (necesita la capacidad "Subir archivos" / upload_files).`
+        );
+      }
       throw new Error(`WordPress Media Error: ${msg}`);
     }
 

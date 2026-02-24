@@ -57,4 +57,10 @@ router.post('/orders/woocommerce-mayorista',
   integrationController.receiveWholesaleOrder.bind(integrationController)
 );
 
+// POST /api/integration/clients/register - Registrar cliente nuevo desde el frontend (tienda). Idempotente por email.
+router.post('/clients/register',
+  authenticateWebhook,
+  integrationController.registerClientFromFrontend.bind(integrationController)
+);
+
 export default router;
