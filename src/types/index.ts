@@ -81,11 +81,18 @@ export interface Product {
   updated_at: string;
 }
 
-// Client types
+// Client types (tipo de negocio)
 export enum ClientType {
   MAYORISTA = 'mayorista',
   MINORISTA = 'minorista',
   PERSONALIZADO = 'personalizado'
+}
+
+// Personería (tipo de persona para facturación)
+export enum Personeria {
+  PERSONA_FISICA = 'persona_fisica',
+  PERSONA_JURIDICA = 'persona_juridica',
+  CONSUMIDOR_FINAL = 'consumidor_final'
 }
 
 export enum SalesChannel {
@@ -108,6 +115,8 @@ export interface Client {
   address?: string;
   city?: string;
   country?: string;
+  personeria: Personeria;
+  cuil_cuit?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

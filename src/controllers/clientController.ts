@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database';
-import { ApiResponse, Client, ClientType, SalesChannel } from '../types';
+import { ApiResponse, Client, ClientType, Personeria, SalesChannel } from '../types';
 import { validationResult } from 'express-validator';
 
 export class ClientController {
@@ -112,6 +112,8 @@ export class ClientController {
           address,
           city,
           country,
+          personeria,
+          cuil_cuit,
           is_active,
           created_at,
           updated_at
@@ -190,6 +192,8 @@ export class ClientController {
           address,
           city,
           country,
+          personeria,
+          cuil_cuit,
           is_active,
           created_at,
           updated_at
@@ -253,7 +257,9 @@ export class ClientController {
         phone, 
         address, 
         city, 
-        country = 'Argentina' 
+        country = 'Argentina',
+        personeria = Personeria.CONSUMIDOR_FINAL,
+        cuil_cuit
       } = req.body;
       
       console.log('Creating client with type:', client_type, 'and sales channel:', sales_channel);
@@ -262,11 +268,11 @@ export class ClientController {
       const code = await this.generateClientCode(client_type);
       
       const insertQuery = `
-        INSERT INTO clients (code, client_type, sales_channel, name, email, phone, address, city, country, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        INSERT INTO clients (code, client_type, sales_channel, name, email, phone, address, city, country, personeria, cuil_cuit, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `;
       
-      const result = await executeQuery(insertQuery, [code, client_type, sales_channel, name, email, phone, address, city, country]);
+      const result = await executeQuery(insertQuery, [code, client_type, sales_channel, name, email, phone, address, city, country, personeria, cuil_cuit || null]);
       
       // Get the created client
       const [newClient] = await executeQuery(
@@ -315,9 +321,9 @@ export class ClientController {
       }
 
       const { id } = req.params;
-      const { code, client_type, sales_channel, name, email, phone, address, city, country, is_active } = req.body;
+      const { code, client_type, sales_channel, name, email, phone, address, city, country, personeria, cuil_cuit, is_active } = req.body;
       
-      console.log('Extracted fields:', { code, client_type, sales_channel, name, email, phone, address, city, country, is_active });
+      console.log('Extracted fields:', { code, client_type, sales_channel, name, email, phone, address, city, country, personeria, cuil_cuit, is_active });
       
       // Check if client exists
       const [existingClient] = await executeQuery('SELECT id FROM clients WHERE id = ?', [id]);
@@ -387,6 +393,14 @@ export class ClientController {
       if (country !== undefined) {
         updateFields.push('country = ?');
         updateValues.push(country);
+      }
+      if (personeria !== undefined) {
+        updateFields.push('personeria = ?');
+        updateValues.push(personeria);
+      }
+      if (cuil_cuit !== undefined) {
+        updateFields.push('cuil_cuit = ?');
+        updateValues.push(cuil_cuit || null);
       }
       if (is_active !== undefined) {
         updateFields.push('is_active = ?');

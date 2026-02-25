@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { ProductService } from '../services/ProductService';
 import { OrderService } from '../services/OrderService';
-import { ApiResponse, ClientType, SalesChannel } from '../types';
+import { ApiResponse, ClientType, Personeria, SalesChannel } from '../types';
 import { executeQuery } from '../config/database';
 import { CreateOrderData, CreateOrderItemData } from '../entities/Order';
 import bcrypt from 'bcryptjs';
@@ -662,8 +662,8 @@ export class IntegrationController {
 
       const insertQuery = `
         INSERT INTO clients (
-          code, client_type, sales_channel, name, email, phone, address, city, country, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+          code, client_type, sales_channel, name, email, phone, address, city, country, personeria, cuil_cuit, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `;
 
       const result = await executeQuery(insertQuery, [
@@ -675,7 +675,9 @@ export class IntegrationController {
         clientData.phone || null,
         clientData.address || null,
         clientData.city || null,
-        clientData.country || 'Argentina'
+        clientData.country || 'Argentina',
+        Personeria.CONSUMIDOR_FINAL,
+        null
       ]);
 
       // Obtener cliente creado

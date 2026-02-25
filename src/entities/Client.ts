@@ -1,4 +1,4 @@
-import { ClientType, SalesChannel } from '../types';
+import { ClientType, Personeria, SalesChannel } from '../types';
 
 export interface Client {
   id: number;
@@ -11,6 +11,8 @@ export interface Client {
   address?: string;
   city?: string;
   country: string;
+  personeria: Personeria;
+  cuil_cuit?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -26,4 +28,6 @@ export interface CreateClientData {
   address?: string;
   city?: string;
   country?: string;
+  personeria?: Personeria;
+  cuil_cuit?: string | null;
 }

@@ -1,5 +1,5 @@
 import { body } from 'express-validator';
-import { ClientType, SalesChannel } from '../types';
+import { ClientType, Personeria, SalesChannel } from '../types';
 
 export const createClientValidation = [
   body('client_type')
@@ -48,7 +48,23 @@ export const createClientValidation = [
     .optional({ nullable: true })
     .isLength({ max: 50 })
     .withMessage('Country must not exceed 50 characters')
-    .trim()
+    .trim(),
+
+  body('personeria')
+    .optional()
+    .isIn(Object.values(Personeria))
+    .withMessage(`Personeria must be one of: ${Object.values(Personeria).join(', ')}`),
+
+  body('cuil_cuit')
+    .optional({ nullable: true })
+    .custom((value, { req }) => {
+      if (value === undefined || value === null || value === '') return true;
+      const digits = String(value).replace(/\D/g, '');
+      if (digits.length !== 11) {
+        throw new Error('CUIL/CUIT must be 11 digits');
+      }
+      return true;
+    })
 ];
 
 export const updateClientValidation = [
@@ -105,7 +121,23 @@ export const updateClientValidation = [
     .isLength({ max: 50 })
     .withMessage('Country must not exceed 50 characters')
     .trim(),
-    
+
+  body('personeria')
+    .optional()
+    .isIn(Object.values(Personeria))
+    .withMessage(`Personeria must be one of: ${Object.values(Personeria).join(', ')}`),
+
+  body('cuil_cuit')
+    .optional({ nullable: true })
+    .custom((value) => {
+      if (value === undefined || value === null || value === '') return true;
+      const digits = String(value).replace(/\D/g, '');
+      if (digits.length !== 11) {
+        throw new Error('CUIL/CUIT must be 11 digits');
+      }
+      return true;
+    }),
+
   body('is_active')
     .optional()
     .isBoolean()

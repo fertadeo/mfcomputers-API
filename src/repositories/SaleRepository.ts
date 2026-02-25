@@ -97,8 +97,8 @@ export class SaleRepository {
         if (!genericClient || genericClient.length === 0) {
           // Crear cliente genérico
           const [newClient] = await connection.execute(
-            `INSERT INTO clients (code, client_type, sales_channel, name, country, is_active)
-             VALUES ('CONSUMIDOR_FINAL', 'persona', 'local', 'Consumidor Final', 'AR', 1)`
+            `INSERT INTO clients (code, client_type, sales_channel, name, country, personeria, cuil_cuit, is_active)
+             VALUES ('CONSUMIDOR_FINAL', 'minorista', 'manual', 'Consumidor Final', 'Argentina', 'consumidor_final', NULL, 1)`
           ) as any[];
           clientId = (newClient as any).insertId;
         } else {
