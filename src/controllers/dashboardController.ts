@@ -6,13 +6,18 @@ export class DashboardController {
   // Get dashboard statistics
   public async getDashboardStats(req: Request, res: Response): Promise<void> {
     try {
-      // Get daily sales
-      const dailySalesQuery = `
+      // Ventas del día: pedidos (WooCommerce / local) + ventas POS
+      const dailySalesFromOrdersQuery = `
         SELECT COALESCE(SUM(total_amount), 0) as daily_sales 
         FROM orders 
         WHERE DATE(order_date) = CURDATE() AND status != 'cancelled'
       `;
-      
+      const dailySalesFromPosQuery = `
+        SELECT COALESCE(SUM(total_amount), 0) as daily_sales 
+        FROM sales 
+        WHERE DATE(sale_date) = CURDATE()
+      `;
+
       // Get active orders
       const activeOrdersQuery = `
         SELECT COUNT(*) as active_orders 
@@ -56,17 +61,24 @@ export class DashboardController {
       `;
 
       // Execute all queries
-      const [dailySales] = await executeQuery(dailySalesQuery);
-      const [activeOrders] = await executeQuery(activeOrdersQuery);
+      const [dailySalesFromOrders] = await executeQuery(dailySalesFromOrdersQuery);
+      const [dailySalesFromPos] = await executeQuery(dailySalesFromPosQuery);
+      const activeOrders = await executeQuery(activeOrdersQuery);
       const [activeClients] = await executeQuery(activeClientsQuery);
       const [criticalProducts] = await executeQuery(criticalProductsQuery);
       const [stockMinority] = await executeQuery(stockMinorityQuery);
       const [stockMajority] = await executeQuery(stockMajorityQuery);
       const [customOrders] = await executeQuery(customOrdersQuery);
 
+      const fromOrders = Number((dailySalesFromOrders as any)?.daily_sales ?? 0);
+      const fromPos = Number((dailySalesFromPos as any)?.daily_sales ?? 0);
+      const activeOrdersCount = (activeOrders as any[])?.[0]?.active_orders ?? 0;
+
       const stats: DashboardStats = {
-        dailySales: dailySales?.daily_sales || 0,
-        activeOrders: activeOrders?.active_orders || 0,
+        dailySales: fromOrders + fromPos,
+        dailySalesFromOrders: fromOrders,
+        dailySalesFromPos: fromPos,
+        activeOrders: activeOrdersCount,
         activeClients: activeClients?.active_clients || 0,
         criticalProducts: criticalProducts?.critical_products || 0,
         stockMinority: stockMinority?.stock_minority || 0,

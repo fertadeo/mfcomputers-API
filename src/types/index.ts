@@ -50,7 +50,12 @@ export enum UserRole {
 
 // Dashboard types
 export interface DashboardStats {
+  /** Total ventas del día: pedidos (WooCommerce/local) + ventas POS */
   dailySales: number;
+  /** Ventas del día solo de pedidos (orders, incl. WooCommerce) */
+  dailySalesFromOrders?: number;
+  /** Ventas del día solo del POS (tabla sales) */
+  dailySalesFromPos?: number;
   activeOrders: number;
   activeClients: number;
   criticalProducts: number;
