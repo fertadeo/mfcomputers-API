@@ -18,7 +18,8 @@ export class SaleController {
   public async createSale(req: Request, res: Response): Promise<void> {
     try {
       const data: CreateSaleData = req.body;
-      const userId = (req as any).user?.id || null;
+      const rawId = (req as any).user?.id;
+      const userId: number | null = typeof rawId === 'number' ? rawId : null;
 
       // Validaciones básicas
       if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {

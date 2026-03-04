@@ -163,7 +163,7 @@ export class SaleRepository {
       [saleId, item.product_id, item.quantity, item.unit_price, totalPrice]
     );
 
-    // Descontar stock del producto
+    // Sincronizar stock del producto en el ERP (descontar cantidad vendida)
     await connection.execute(
       `UPDATE products 
        SET stock = GREATEST(0, stock - ?) 

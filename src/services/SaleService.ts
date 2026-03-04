@@ -28,23 +28,24 @@ export class SaleService {
   // =====================================================
 
   /**
-   * Crea una nueva venta local
+   * Crea una nueva venta local.
+   * Flujo: validar stock → crear venta (descuenta stock en ERP) → registrar pago → sincronizar con WooCommerce (pedido + descuento de stock en WC).
    */
   async createSale(data: CreateSaleData, userId: number | null): Promise<ApiResponse> {
     try {
-      // Validar stock disponible antes de crear la venta
+      // 1. Validar stock disponible antes de crear la venta
       await this.validateStockAvailability(data.items);
 
-      // Validar productos
+      // 2. Validar que los productos existan
       await this.validateProducts(data.items);
 
-      // Crear venta
+      // 3. Crear venta (en SaleRepository.createSaleItem se descuenta stock en products)
       const sale = await this.saleRepository.createSale(data, userId);
 
-      // Registrar ingreso en módulo de caja (payments)
+      // 4. Registrar ingreso en módulo de caja (payments)
       await this.registerPayment(sale, userId);
 
-      // Sincronizar con WooCommerce si está configurado
+      // 5. Sincronizar con WooCommerce: crea pedido y actualiza stock en WooCommerce
       const syncToWooCommerce = data.sync_to_woocommerce !== false; // Por defecto true
       if (syncToWooCommerce && this.wooCommerceService.isConfigured()) {
         try {

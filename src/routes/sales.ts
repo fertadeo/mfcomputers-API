@@ -1,11 +1,36 @@
-import { Router } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { SaleController } from '../controllers/saleController';
 import { body, param, query } from 'express-validator';
 import { validate } from '../middleware/validation';
 import { authenticateApiKey } from '../middleware/auth';
+import { optionalAuthenticateJWT } from '../middleware/jwt';
+import { AuthenticatedRequest } from '../middleware/jwt';
+import { ApiResponse } from '../types';
 
 const router = Router();
 const saleController = new SaleController();
+
+/**
+ * Acepta JWT (Bearer) o API Key (x-api-key).
+ * El POS desde el frontend usa JWT; integraciones externas pueden usar x-api-key.
+ */
+const authenticateSales = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  optionalAuthenticateJWT(req, res, () => {
+    if (req.user) {
+      return next();
+    }
+    if (req.headers['x-api-key']) {
+      return authenticateApiKey(req as any, res, next);
+    }
+    const response: ApiResponse = {
+      success: false,
+      message: 'Se requiere autenticación',
+      error: 'Envía Authorization: Bearer <token> (JWT) o el header x-api-key',
+      timestamp: new Date().toISOString()
+    };
+    res.status(401).json(response);
+  });
+};
 
 // =====================================================
 // VALIDACIONES
@@ -47,9 +72,9 @@ const saleFiltersValidation = [
 // RUTAS DE VENTAS
 // =====================================================
 
-// POST /api/sales - Crear nueva venta
+// POST /api/sales - Crear nueva venta (JWT o x-api-key)
 router.post('/',
-  authenticateApiKey,
+  authenticateSales,
   validate(createSaleValidation),
   saleController.createSale.bind(saleController)
 );
@@ -75,9 +100,9 @@ router.get('/:id',
 // RUTAS DE SINCRONIZACIÓN CON WOOCOMMERCE
 // =====================================================
 
-// POST /api/sales/:id/sync - Sincronizar venta a WooCommerce
+// POST /api/sales/:id/sync - Sincronizar venta a WooCommerce (JWT o x-api-key)
 router.post('/:id/sync',
-  authenticateApiKey,
+  authenticateSales,
   validate(idParamValidation),
   saleController.syncSaleToWooCommerce.bind(saleController)
 );
