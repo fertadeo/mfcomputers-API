@@ -36,8 +36,8 @@ export class SaleService {
       // 1. Validar stock disponible antes de crear la venta
       await this.validateStockAvailability(data.items);
 
-      // 2. Validar que los productos existan
-      await this.validateProducts(data.items);
+      // 2. Validar que los productos existan (y estén activos salvo allow_inactive)
+      await this.validateProducts(data.items, data.allow_inactive === true);
 
       // 3. Crear venta (en SaleRepository.createSaleItem se descuenta stock en products)
       const sale = await this.saleRepository.createSale(data, userId);
@@ -510,17 +510,24 @@ export class SaleService {
   }
 
   /**
-   * Valida que los productos existan y estén activos
+   * Valida que los productos existan y, salvo allowInactive, que estén activos.
+   * @param allowInactive Si true, permite incluir productos inactivos (ej. último stock en POS).
    */
-  private async validateProducts(items: Array<{ product_id: number }>): Promise<void> {
+  private async validateProducts(
+    items: Array<{ product_id: number }>,
+    allowInactive: boolean = false
+  ): Promise<void> {
     for (const item of items) {
       const product = await this.productService.getProductById(item.product_id);
       if (!product) {
         throw new Error(`Producto con ID ${item.product_id} no encontrado`);
       }
 
-      if (!product.is_active) {
-        throw new Error(`El producto ${product.name} (${product.code}) está inactivo`);
+      if (!allowInactive && !product.is_active) {
+        throw new Error(
+          `El producto ${product.name} (${product.code}) está inactivo. ` +
+          `Actívalo en el listado de productos o envía allow_inactive: true en el body para permitir la venta.`
+        );
       }
     }
   }

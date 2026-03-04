@@ -71,8 +71,12 @@ export class SaleController {
       }
 
       const result = await this.saleService.createSale(data, userId);
-      
-      res.status(result.success ? 201 : 400).json(result);
+
+      if (!result.success) {
+        res.status(400).json(result);
+        return;
+      }
+      res.status(201).json(result);
     } catch (error) {
       console.error('Create sale controller error:', error);
       const response: ApiResponse = {

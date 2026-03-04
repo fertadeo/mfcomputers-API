@@ -58,6 +58,8 @@ export interface CreateSaleData {
   };
   notes?: string;
   sync_to_woocommerce?: boolean; // Por defecto true
+  /** Si es true, permite vender productos marcados como inactivos (útil en POS para último stock) */
+  allow_inactive?: boolean;
 }
 
 export interface UpdateSaleData {

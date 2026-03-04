@@ -32,6 +32,54 @@ const authenticateSales = (req: AuthenticatedRequest, res: Response, next: NextF
   });
 };
 
+/**
+ * Normaliza el body de crear venta: acepta camelCase del frontend y lo convierte al formato esperado por la API.
+ * Así se evitan 400 por diferencias de nombre (productId → product_id, unitPrice → unit_price, etc.).
+ */
+const normalizeSaleBody = (req: AuthenticatedRequest, _res: Response, next: NextFunction): void => {
+  if (!req.body || req.method !== 'POST') {
+    return next();
+  }
+  const b = req.body;
+
+  // payment_method (acepta paymentMethod o "Efectivo" → "efectivo")
+  const rawPaymentMethod = b.payment_method ?? b.paymentMethod;
+  if (rawPaymentMethod !== undefined) {
+    req.body.payment_method = String(rawPaymentMethod).toLowerCase();
+  }
+
+  // client_id (acepta clientId)
+  if (b.clientId !== undefined && b.client_id === undefined) {
+    req.body.client_id = b.clientId;
+  }
+
+  // payment_details (acepta paymentDetails)
+  if (b.paymentDetails !== undefined && b.payment_details === undefined) {
+    req.body.payment_details = b.paymentDetails;
+  }
+
+  // notes, sync_to_woocommerce, allow_inactive
+  if (b.notes !== undefined) req.body.notes = b.notes;
+  if (b.syncToWooCommerce !== undefined) req.body.sync_to_woocommerce = b.syncToWooCommerce;
+  if (b.allowInactive !== undefined) req.body.allow_inactive = b.allowInactive;
+
+  // items: normalizar cada ítem (productId → product_id, unitPrice → unit_price)
+  if (Array.isArray(b.items)) {
+    req.body.items = b.items.map((item: any) => {
+      const product_id = item.product_id ?? item.productId;
+      const quantity = item.quantity;
+      const unit_price = item.unit_price ?? item.unitPrice;
+      return {
+        product_id: typeof product_id === 'string' ? parseInt(product_id, 10) : product_id,
+        quantity: typeof quantity === 'string' ? parseInt(quantity, 10) : quantity,
+        unit_price: typeof unit_price === 'string' ? parseFloat(unit_price) : Number(unit_price)
+      };
+    });
+  }
+
+  next();
+};
+
 // =====================================================
 // VALIDACIONES
 // =====================================================
@@ -49,7 +97,8 @@ const createSaleValidation = [
   body('payment_details.tarjeta').optional().isFloat({ min: 0 }).withMessage('tarjeta debe ser un número positivo'),
   body('payment_details.transferencia').optional().isFloat({ min: 0 }).withMessage('transferencia debe ser un número positivo'),
   body('notes').optional().isString().isLength({ max: 1000 }).withMessage('Notas inválidas'),
-  body('sync_to_woocommerce').optional().isBoolean().withMessage('sync_to_woocommerce debe ser booleano')
+  body('sync_to_woocommerce').optional().isBoolean().withMessage('sync_to_woocommerce debe ser booleano'),
+  body('allow_inactive').optional().isBoolean().withMessage('allow_inactive debe ser booleano')
 ];
 
 // Validación para parámetros de ID
@@ -75,6 +124,7 @@ const saleFiltersValidation = [
 // POST /api/sales - Crear nueva venta (JWT o x-api-key)
 router.post('/',
   authenticateSales,
+  normalizeSaleBody,
   validate(createSaleValidation),
   saleController.createSale.bind(saleController)
 );

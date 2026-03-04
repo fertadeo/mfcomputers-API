@@ -182,7 +182,7 @@ export class SaleRepository {
         c.name as client_name,
         c.code as client_code,
         c.email as client_email,
-        u.name as created_by_name
+        COALESCE(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), u.username) as created_by_name
        FROM sales s
        LEFT JOIN clients c ON s.client_id = c.id
        LEFT JOIN users u ON s.created_by = u.id
@@ -285,7 +285,7 @@ export class SaleRepository {
         c.name as client_name,
         c.code as client_code,
         c.email as client_email,
-        u.name as created_by_name
+        COALESCE(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), u.username) as created_by_name
        FROM sales s
        LEFT JOIN clients c ON s.client_id = c.id
        LEFT JOIN users u ON s.created_by = u.id
