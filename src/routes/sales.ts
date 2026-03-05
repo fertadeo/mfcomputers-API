@@ -3,9 +3,12 @@ import { SaleController } from '../controllers/saleController';
 import { body, param, query } from 'express-validator';
 import { validate } from '../middleware/validation';
 import { authenticateApiKey } from '../middleware/auth';
-import { optionalAuthenticateJWT } from '../middleware/jwt';
+import { optionalAuthenticateJWT, authenticateJWT, authorizeRoles } from '../middleware/jwt';
 import { AuthenticatedRequest } from '../middleware/jwt';
 import { ApiResponse } from '../types';
+
+/** Roles que pueden ver listado de ventas POS y estadísticas (flexible para producción). */
+const SALES_VIEW_ROLES = ['admin', 'gerencia', 'ventas', 'logistica', 'finanzas', 'manager', 'employee', 'viewer'] as const;
 
 const router = Router();
 const saleController = new SaleController();
@@ -129,19 +132,25 @@ router.post('/',
   saleController.createSale.bind(saleController)
 );
 
-// GET /api/sales - Obtener todas las ventas con filtros
+// GET /api/sales - Obtener todas las ventas con filtros (requiere JWT + rol permitido para ver tabla en prod)
 router.get('/',
+  authenticateJWT,
+  authorizeRoles(...SALES_VIEW_ROLES),
   validate(saleFiltersValidation),
   saleController.getAllSales.bind(saleController)
 );
 
 // GET /api/sales/stats - Obtener estadísticas de ventas
 router.get('/stats',
+  authenticateJWT,
+  authorizeRoles(...SALES_VIEW_ROLES),
   saleController.getSaleStats.bind(saleController)
 );
 
 // GET /api/sales/:id - Obtener venta por ID
 router.get('/:id',
+  authenticateJWT,
+  authorizeRoles(...SALES_VIEW_ROLES),
   validate(idParamValidation),
   saleController.getSaleById.bind(saleController)
 );
