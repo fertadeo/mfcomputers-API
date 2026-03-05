@@ -278,7 +278,9 @@ export class SaleRepository {
     ) as any[];
     const total = countResult[0]?.total || 0;
 
-    // Obtener ventas
+    // Obtener ventas (LIMIT/OFFSET como literales: mysql2 puede fallar con placeholders en algunos entornos)
+    const limitNum = Number(limit);
+    const offsetNum = Number(offset);
     const sales = await executeQuery(
       `SELECT 
         s.*,
@@ -291,8 +293,8 @@ export class SaleRepository {
        LEFT JOIN users u ON s.created_by = u.id
        ${whereClause}
        ORDER BY s.sale_date DESC, s.id DESC
-       LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
+       LIMIT ${limitNum} OFFSET ${offsetNum}`,
+      params
     ) as any[];
 
     // Parsear payment_details y obtener items para cada venta
