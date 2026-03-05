@@ -15,6 +15,16 @@ export interface Product {
   woocommerce_json?: any | null; // JSON completo del producto desde WooCommerce (puede ser grande)
   barcode?: string | null;
   qr_code?: string | null;
+  /** Peso en kg (envíos, WooCommerce) */
+  weight?: number | null;
+  /** Longitud en cm (envíos, WooCommerce) */
+  length?: number | null;
+  /** Ancho en cm (envíos, WooCommerce) */
+  width?: number | null;
+  /** Alto en cm (envíos, WooCommerce) */
+  height?: number | null;
+  /** Permitir reservas con stock 0 (venta por encargo); en WooCommerce = backorders 'notify' */
+  allow_backorders?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +50,11 @@ export interface CreateProductData {
   woocommerce_json?: any | null; // JSON completo del producto desde WooCommerce
   barcode?: string | null;
   qr_code?: string | null;
+  weight?: number | null;
+  length?: number | null;
+  width?: number | null;
+  height?: number | null;
+  allow_backorders?: boolean;
 }
 
 export interface UpdateProductData extends Partial<CreateProductData> {

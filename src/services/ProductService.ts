@@ -236,7 +236,8 @@ export class ProductService {
           ? [{ name: p.category_name }]
           : []; // Array vacío para limpiar categorías anteriores si no hay categoría asignada
 
-    const payload = {
+    const allowBackorders = !!(product as any).allow_backorders;
+    const payload: any = {
       name: product.name,
       sku: product.code,
       regular_price: String(product.price),
@@ -245,6 +246,7 @@ export class ProductService {
       manage_stock: true,
       stock_quantity: stock,
       stock_status: (stock > 0 ? 'instock' : 'outofstock') as 'instock' | 'outofstock',
+      backorders: allowBackorders ? 'notify' : 'no',
       status: (product.is_active ? 'publish' : 'draft') as 'publish' | 'draft',
       images: imagesPayload,
       categories: categoriesPayload,
@@ -253,6 +255,16 @@ export class ProductService {
         { key: '_mfcomputers_erp_code', value: product.code }
       ]
     };
+    if ((product as any).weight != null && (product as any).weight !== '') {
+      payload.weight = String((product as any).weight);
+    }
+    if ((product as any).length != null || (product as any).width != null || (product as any).height != null) {
+      payload.dimensions = {
+        length: String((product as any).length ?? ''),
+        width: String((product as any).width ?? ''),
+        height: String((product as any).height ?? '')
+      };
+    }
 
     logger.product.sync(`Producto id=${productId}: payload preparado (name, sku, price, stock, images, categories).`);
 

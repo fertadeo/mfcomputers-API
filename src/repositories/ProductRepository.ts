@@ -65,6 +65,11 @@ export class ProductRepository {
         p.woocommerce_id,
         p.barcode,
         p.qr_code,
+        p.weight,
+        p.length,
+        p.width,
+        p.height,
+        p.allow_backorders,
         p.created_at,
         p.updated_at
       FROM products p
@@ -76,11 +81,7 @@ export class ProductRepository {
     const products = await executeQuery(productsQuery, params);
 
     // Parsear JSON de imágenes y woocommerce_image_ids
-    const parsedProducts = (Array.isArray(products) ? products : []).map((product: any) => ({
-      ...product,
-      images: product.images ? (typeof product.images === 'string' ? JSON.parse(product.images) : product.images) : null,
-      woocommerce_image_ids: product.woocommerce_image_ids ? (typeof product.woocommerce_image_ids === 'string' ? JSON.parse(product.woocommerce_image_ids) : product.woocommerce_image_ids) : null
-    }));
+    const parsedProducts = (Array.isArray(products) ? products : []).map((product: any) => ProductRepository.parseProductRow(product));
 
     return { products: parsedProducts, total };
   }
@@ -154,6 +155,11 @@ export class ProductRepository {
         p.woocommerce_json,
         p.barcode,
         p.qr_code,
+        p.weight,
+        p.length,
+        p.width,
+        p.height,
+        p.allow_backorders,
         p.created_at,
         p.updated_at
       FROM products p
@@ -164,15 +170,19 @@ export class ProductRepository {
     const product = await executeQuery(query, [id]);
     if (!product[0]) return null;
     
-    // Parsear JSON de imágenes, woocommerce_image_ids y woocommerce_json
-    return {
-      ...product[0],
-      images: product[0].images ? (typeof product[0].images === 'string' ? JSON.parse(product[0].images) : product[0].images) : null,
-      woocommerce_image_ids: product[0].woocommerce_image_ids ? (typeof product[0].woocommerce_image_ids === 'string' ? JSON.parse(product[0].woocommerce_image_ids) : product[0].woocommerce_image_ids) : null,
-      woocommerce_json: product[0].woocommerce_json
-        ? (typeof product[0].woocommerce_json === 'string' ? JSON.parse(product[0].woocommerce_json) : product[0].woocommerce_json)
-        : null
+    return ProductRepository.parseProductRow(product[0]);
+  }
+
+  /** Parsea una fila de producto (JSON, allow_backorders como boolean) */
+  private static parseProductRow(row: any): any {
+    const parsed = {
+      ...row,
+      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
+      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
+      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null,
+      allow_backorders: row.allow_backorders === 1 || row.allow_backorders === true
     };
+    return parsed;
   }
 
   // Obtener producto por código
@@ -194,26 +204,14 @@ export class ProductRepository {
       return null;
     }
 
-    const row = results[0];
-    return {
-      ...row,
-      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
-      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null
-    };
+    return ProductRepository.parseProductRow(results[0]);
   }
 
   async findByCode(code: string): Promise<Product | null> {
     const query = 'SELECT * FROM products WHERE code = ?';
     const product = await executeQuery(query, [code]);
     if (!product[0]) return null;
-    
-    const row = product[0] as any;
-    return {
-      ...row,
-      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
-      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
-      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
-    };
+    return ProductRepository.parseProductRow(product[0]);
   }
 
   // Crear producto
@@ -232,44 +230,48 @@ export class ProductRepository {
       woocommerce_id,
       woocommerce_json,
       barcode,
-      qr_code
+      qr_code,
+      weight,
+      length,
+      width,
+      height,
+      allow_backorders = false
     } = data;
     
     const insertQuery = `
       INSERT INTO products (
         code, name, description, category_id, price, stock, min_stock, max_stock,
-        is_active, images, woocommerce_image_ids, barcode, qr_code, woocommerce_id, woocommerce_json
+        is_active, images, woocommerce_image_ids, barcode, qr_code, woocommerce_id, woocommerce_json,
+        weight, length, width, height, allow_backorders
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const result = await executeQuery(insertQuery, [
-      code, 
-      name, 
-      description ?? null, 
-      category_id ?? null, 
-      price, 
-      stock, 
-      min_stock, 
+      code,
+      name,
+      description ?? null,
+      category_id ?? null,
+      price,
+      stock,
+      min_stock,
       max_stock,
       images ? JSON.stringify(images) : null,
       woocommerce_image_ids ? JSON.stringify(woocommerce_image_ids) : null,
       barcode ?? null,
       qr_code ?? null,
       woocommerce_id ?? null,
-      woocommerce_json ? JSON.stringify(woocommerce_json) : null
+      woocommerce_json ? JSON.stringify(woocommerce_json) : null,
+      weight ?? null,
+      length ?? null,
+      width ?? null,
+      height ?? null,
+      allow_backorders ? 1 : 0
     ]);
     
     const newProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [result.insertId]);
     if (!newProduct[0]) throw new Error('Error al crear producto');
-    
-    const row = newProduct[0] as any;
-    return {
-      ...row,
-      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
-      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
-      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
-    };
+    return ProductRepository.parseProductRow(newProduct[0]);
   }
 
   // Actualizar producto
@@ -294,6 +296,8 @@ export class ProductRepository {
           } else {
             values.push(JSON.stringify(value));
           }
+        } else if (key === 'allow_backorders') {
+          values.push(value ? 1 : 0);
         } else {
           values.push(value);
         }
@@ -311,14 +315,7 @@ export class ProductRepository {
     
     const updatedProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [id]);
     if (!updatedProduct[0]) throw new Error('Producto no encontrado después de actualizar');
-    
-    const row = updatedProduct[0] as any;
-    return {
-      ...row,
-      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
-      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
-      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
-    };
+    return ProductRepository.parseProductRow(updatedProduct[0]);
   }
 
   // Actualizar stock
@@ -340,14 +337,7 @@ export class ProductRepository {
     
     const updatedProduct = await executeQuery('SELECT * FROM products WHERE id = ?', [id]);
     if (!updatedProduct[0]) throw new Error('Producto no encontrado después de actualizar stock');
-    
-    const row = updatedProduct[0] as any;
-    return {
-      ...row,
-      images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : null,
-      woocommerce_image_ids: row.woocommerce_image_ids ? (typeof row.woocommerce_image_ids === 'string' ? JSON.parse(row.woocommerce_image_ids) : row.woocommerce_image_ids) : null,
-      woocommerce_json: row.woocommerce_json ? (typeof row.woocommerce_json === 'string' ? JSON.parse(row.woocommerce_json) : row.woocommerce_json) : null
-    };
+    return ProductRepository.parseProductRow(updatedProduct[0]);
   }
 
   // Obtener productos con stock bajo

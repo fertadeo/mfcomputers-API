@@ -22,6 +22,11 @@ const createProductValidation = [
   body('stock').optional().isInt({ min: 0 }).withMessage('Stock debe ser un número entero positivo'),
   body('min_stock').optional().isInt({ min: 0 }).withMessage('Stock mínimo debe ser un número entero positivo'),
   body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo'),
+  body('weight').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Peso debe ser un número positivo (kg)'),
+  body('length').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Longitud debe ser un número positivo (cm)'),
+  body('width').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Ancho debe ser un número positivo (cm)'),
+  body('height').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Alto debe ser un número positivo (cm)'),
+  body('allow_backorders').optional().isBoolean().withMessage('allow_backorders debe ser booleano (venta por encargo)'),
   body('sync_to_woocommerce').optional().isBoolean().withMessage('sync_to_woocommerce debe ser booleano')
 ];
 
@@ -40,6 +45,11 @@ const updateProductValidation = [
   body('stock').optional().isInt({ min: 0 }).withMessage('Stock debe ser un número entero positivo'),
   body('min_stock').optional().isInt({ min: 0 }).withMessage('Stock mínimo debe ser un número entero positivo'),
   body('max_stock').optional().isInt({ min: 0 }).withMessage('Stock máximo debe ser un número entero positivo'),
+  body('weight').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Peso debe ser un número positivo (kg)'),
+  body('length').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Longitud debe ser un número positivo (cm)'),
+  body('width').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Ancho debe ser un número positivo (cm)'),
+  body('height').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Alto debe ser un número positivo (cm)'),
+  body('allow_backorders').optional().isBoolean().withMessage('allow_backorders debe ser booleano (venta por encargo)'),
   body('sync_to_woocommerce').optional().isBoolean().withMessage('sync_to_woocommerce debe ser booleano')
 ];
 

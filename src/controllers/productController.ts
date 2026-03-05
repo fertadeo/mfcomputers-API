@@ -172,6 +172,11 @@ export class ProductController {
         stock = 0, 
         min_stock = 0, 
         max_stock = 1000,
+        weight,
+        length,
+        width,
+        height,
+        allow_backorders,
         sync_to_woocommerce = false
       } = req.body;
       
@@ -187,7 +192,12 @@ export class ProductController {
         price,
         stock,
         min_stock,
-        max_stock
+        max_stock,
+        weight: weight ?? null,
+        length: length ?? null,
+        width: width ?? null,
+        height: height ?? null,
+        allow_backorders: allow_backorders === true
       }, sync_to_woocommerce === true);
       
       const response: ApiResponse<Product> = {
@@ -242,6 +252,11 @@ export class ProductController {
         min_stock, 
         max_stock, 
         is_active,
+        weight,
+        length,
+        width,
+        height,
+        allow_backorders,
         sync_to_woocommerce = false
       } = req.body;
       
@@ -258,7 +273,12 @@ export class ProductController {
         stock,
         min_stock,
         max_stock,
-        is_active
+        is_active,
+        weight: weight === undefined ? undefined : (weight ?? null),
+        length: length === undefined ? undefined : (length ?? null),
+        width: width === undefined ? undefined : (width ?? null),
+        height: height === undefined ? undefined : (height ?? null),
+        allow_backorders: allow_backorders === undefined ? undefined : (allow_backorders === true)
       }, sync_to_woocommerce === true);
       
       const response: ApiResponse<Product> = {

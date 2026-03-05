@@ -674,7 +674,10 @@ export class WooCommerceService {
     manage_stock?: boolean;
     stock_quantity?: number;
     stock_status?: 'instock' | 'outofstock';
+    backorders?: 'no' | 'yes' | 'notify';
     status?: 'publish' | 'draft' | 'pending';
+    weight?: string | number | null;
+    dimensions?: { length?: string | number; width?: string | number; height?: string | number } | null;
     images?: Array<{ id?: number; src?: string }>;
     categories?: Array<{ id?: number; name?: string }>;
     meta_data?: Array<{ key: string; value: string | number }>;
@@ -690,6 +693,19 @@ export class WooCommerceService {
       status: productData.status || 'publish'
     };
 
+    if (productData.backorders !== undefined) {
+      payload.backorders = productData.backorders;
+    }
+    if (productData.weight != null && productData.weight !== '') {
+      payload.weight = String(productData.weight);
+    }
+    if (productData.dimensions && (productData.dimensions.length != null || productData.dimensions.width != null || productData.dimensions.height != null)) {
+      payload.dimensions = {
+        length: String(productData.dimensions.length ?? ''),
+        width: String(productData.dimensions.width ?? ''),
+        height: String(productData.dimensions.height ?? '')
+      };
+    }
     if (productData.description !== undefined) {
       payload.description = productData.description;
     }
@@ -744,7 +760,10 @@ export class WooCommerceService {
       manage_stock?: boolean;
       stock_quantity?: number;
       stock_status?: 'instock' | 'outofstock';
+      backorders?: 'no' | 'yes' | 'notify';
       status?: 'publish' | 'draft' | 'pending';
+      weight?: string | number | null;
+      dimensions?: { length?: string | number; width?: string | number; height?: string | number } | null;
       images?: Array<{ id?: number; src?: string }>;
       categories?: Array<{ id?: number; name?: string }>;
       meta_data?: Array<{ key: string; value: string | number }>;
@@ -761,7 +780,16 @@ export class WooCommerceService {
     if (productData.manage_stock !== undefined) payload.manage_stock = productData.manage_stock;
     if (productData.stock_quantity !== undefined) payload.stock_quantity = productData.stock_quantity;
     if (productData.stock_status !== undefined) payload.stock_status = productData.stock_status;
+    if (productData.backorders !== undefined) payload.backorders = productData.backorders;
     if (productData.status !== undefined) payload.status = productData.status;
+    if (productData.weight !== undefined) payload.weight = productData.weight == null || productData.weight === '' ? '' : String(productData.weight);
+    if (productData.dimensions !== undefined) {
+      payload.dimensions = {
+        length: String(productData.dimensions?.length ?? ''),
+        width: String(productData.dimensions?.width ?? ''),
+        height: String(productData.dimensions?.height ?? '')
+      };
+    }
     if (productData.images !== undefined) payload.images = productData.images;
     if (productData.categories !== undefined) payload.categories = productData.categories;
     if (productData.meta_data !== undefined) payload.meta_data = productData.meta_data;
