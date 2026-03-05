@@ -239,8 +239,8 @@ export class SaleRepository {
     page: number;
     limit: number;
   }> {
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const page = Math.max(1, parseInt(String(filters.page ?? 1), 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(String(filters.limit ?? 20), 10) || 20));
     const offset = (page - 1) * limit;
 
     let whereClause = 'WHERE 1=1';
