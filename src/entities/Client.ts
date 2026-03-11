@@ -19,7 +19,7 @@ export interface Client {
 }
 
 export interface CreateClientData {
-  code: string;
+  code?: string;
   client_type?: ClientType;
   sales_channel?: SalesChannel;
   name: string;
