@@ -272,7 +272,20 @@ export class ClientController {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `;
       
-      const result = await executeQuery(insertQuery, [code, client_type, sales_channel, name, email, phone, address, city, country, personeria, cuil_cuit || null]);
+      // Aseguramos no enviar valores undefined al driver de MySQL
+      const result = await executeQuery(insertQuery, [
+        code,
+        client_type,
+        sales_channel,
+        name,
+        email || null,
+        phone || null,
+        address || null,
+        city || null,
+        country,
+        personeria,
+        cuil_cuit || null
+      ]);
       
       // Get the created client
       const [newClient] = await executeQuery(

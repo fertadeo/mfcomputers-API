@@ -64,6 +64,7 @@ export class PurchaseRepository {
     const total = countResult?.total || 0;
     
     // Get purchases with supplier info
+    // Usamos interpolación para LIMIT/OFFSET para evitar problemas con algunos motores MySQL
     const selectQuery = `
       SELECT 
         p.id,
@@ -81,10 +82,11 @@ export class PurchaseRepository {
       LEFT JOIN suppliers s ON p.supplier_id = s.id
       ${whereClause}
       ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${limitInt} OFFSET ${offset}
     `;
     
-    const purchases = await executeQuery(selectQuery, [...queryParams, limitInt, offset]);
+    // Ejecutamos solo con los parámetros del WHERE
+    const purchases = await executeQuery(selectQuery, queryParams);
     
     return { purchases, total };
   }
