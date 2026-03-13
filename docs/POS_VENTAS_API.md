@@ -43,6 +43,9 @@ Al crear una venta, el sistema automáticamente:
 | `payment_details` | object | Si método es `mixto` | `{ "efectivo": number, "tarjeta": number, "transferencia": number }` cuya suma = total. |
 | `notes`         | string | No        | Máx. 1000 caracteres. |
 | `sync_to_woocommerce` | boolean | No | Por defecto `true`. |
+| `allow_inactive` | boolean | No | Si `true`, permite vender productos marcados como inactivos (útil para último stock en POS). |
+
+**Formato del body:** La API acepta tanto **snake_case** (`product_id`, `unit_price`, `payment_method`, `client_id`, `payment_details`) como **camelCase** (`productId`, `unitPrice`, `paymentMethod`, `clientId`, `paymentDetails`). Los valores de `payment_method` se normalizan a minúsculas (`"Efectivo"` → `"efectivo"`).
 
 ### Respuesta exitosa (201)
 
@@ -59,6 +62,28 @@ Al crear una venta, el sistema automáticamente:
 
 - Comprueba que la URL sea exactamente **`POST /api/sales`** (con el prefijo `/api` y el path `/sales`).
 - Comprueba que la base URL del frontend (variable de entorno o config) apunte al mismo host/puerto donde corre esta API.
+
+### Tabla `sales` no existe (error en servidor)
+
+Si en los logs aparece `Table 'mfcomputers.sales' doesn't exist`, hay que crear las tablas del módulo de ventas. Ejecuta en tu base de datos el script:
+
+- **`docs/migrations/2026-03-03_create_sales_tables.sql`**
+
+Ejemplo (MySQL/MariaDB):
+
+```bash
+mysql -u usuario -p mfcomputers < docs/migrations/2026-03-03_create_sales_tables.sql
+```
+
+O desde tu cliente SQL: copia y ejecuta el contenido de ese archivo.
+
+### Si recibes 400 (Bad Request)
+
+- La respuesta incluye `message` y, si es por validación, un array `data` con los errores (campo y mensaje). Revisa en la pestaña **Network** del navegador el cuerpo de la respuesta (Response).
+- Comprueba que **items** sea un array con al menos un elemento y que cada ítem tenga **product_id** (o productId), **quantity** y **unit_price** (o unitPrice) como números.
+- **payment_method** debe ser exactamente uno de: `efectivo`, `tarjeta`, `transferencia`, `mixto` (minúsculas; si envías "Efectivo", la API lo normaliza).
+- Si el método es **mixto**, incluye **payment_details** con `efectivo`, `tarjeta` y/o `transferencia` y que la suma coincida con el total de la venta.
+- Si el error dice que **el producto está inactivo**: activa el producto en el listado de productos del ERP o envía en el body **`allow_inactive: true`** para permitir venderlo desde el POS.
 
 ### Si recibes 401
 

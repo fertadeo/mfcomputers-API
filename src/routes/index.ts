@@ -20,6 +20,7 @@ import accruedLiabilityRoutes from './accruedLiabilities';
 import apiKeyRoutes from './apiKeys';
 import categoryRoutes from './categories';
 import saleRoutes from './sales';
+import repairOrderRoutes from './repairOrders';
 
 const router = Router();
 
@@ -45,6 +46,7 @@ router.use('/accrued-liabilities', accruedLiabilityRoutes);
 router.use('/api-keys', apiKeyRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/sales', saleRoutes);
+router.use('/repair-orders', repairOrderRoutes);
 
 // Health check for API routes
 router.get('/', (req, res) => {
@@ -72,6 +74,7 @@ router.get('/', (req, res) => {
       accruedLiabilities: '/api/accrued-liabilities',
       apiKeys: '/api/api-keys',
       categories: '/api/categories',
+      repairOrders: '/api/repair-orders',
       // Future routes will be added here
       stock: '/api/products/stock (available)',
       production: '/api/production (coming soon)',
@@ -159,6 +162,20 @@ router.get('/', (req, res) => {
       create: 'POST /api/sales',
       stats: 'GET /api/sales/stats',
       sync_to_woocommerce: 'POST /api/sales/:id/sync'
+    },
+    repairOrders: {
+      list: 'GET /api/repair-orders',
+      get_by_id: 'GET /api/repair-orders/:id',
+      create: 'POST /api/repair-orders',
+      update: 'PUT /api/repair-orders/:id',
+      stats: 'GET /api/repair-orders/stats',
+      items: 'GET/POST/PUT/DELETE /api/repair-orders/:id/items(/:itemId)',
+      send_budget: 'POST /api/repair-orders/:id/send-budget',
+      accept: 'POST /api/repair-orders/:id/accept',
+      cancel: 'POST /api/repair-orders/:id/cancel',
+      update_status: 'PUT /api/repair-orders/:id/status',
+      acceptance_document: 'GET /api/repair-orders/:id/acceptance-document',
+      payments: 'GET/POST /api/repair-orders/:id/payments'
     },
     purchases: {
       list: 'GET /api/purchases',
